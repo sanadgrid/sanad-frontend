@@ -15,7 +15,10 @@ export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId,
 )
 
-const app = initializeApp(firebaseConfig)
+// getAuth() throws on an empty apiKey, which would break every module importing
+// this file. A placeholder keeps the imports safe; services check
+// `isFirebaseConfigured` before making any call.
+const app = initializeApp(isFirebaseConfigured ? firebaseConfig : { ...firebaseConfig, apiKey: 'unconfigured' })
 
 export const auth = getAuth(app)
 // The project's Firestore database is named `sanadgrid`, not `(default)`.

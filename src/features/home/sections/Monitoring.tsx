@@ -119,6 +119,13 @@ export function Monitoring() {
             </div>
           </div>
         </div>
+
+        <div className="dashboard-cta reveal">
+          <a className="btn btn--primary" href="/restoration">
+            جرّب لوحة قدرة استعادة الخدمة <Icon name="arrowLeft" size={18} />
+          </a>
+          <span>نموذج تفاعلي ببيانات عامة تجريبية</span>
+        </div>
       </div>
     </section>
   )
