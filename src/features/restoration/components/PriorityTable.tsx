@@ -97,7 +97,7 @@ export function PriorityTable({ rows, visibleCount, selectedId, onSelect, onExpo
                   <td className="num">{fmt(a.loadMva, 1)}</td>
                   <td className="num">{fmt(a.firmCapacityMva)}</td>
                   <td>
-                    <span className="rc-meter" style={{ color: STATUS[a.status].color }}>
+                    <span className={`rc-meter rc-status--${a.status}`}>
                       <i aria-hidden="true">
                         <i style={{ width: `${a.capacityPct}%` }} />
                       </i>

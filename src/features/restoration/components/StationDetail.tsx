@@ -59,7 +59,7 @@ export function StationDetail({ row, areaName, onClose }: StationDetailProps) {
       </header>
 
       <div className="rc-detail__chips">
-        <span className="rc-chip" style={{ color: STATUS[a.status].color }}>
+        <span className={`rc-chip rc-status--${a.status}`}>
           <i aria-hidden="true" /> {STATUS[a.status].label}
         </span>
         <span className="rc-chip rc-chip--plain num" dir="ltr">
@@ -68,7 +68,7 @@ export function StationDetail({ row, areaName, onClose }: StationDetailProps) {
       </div>
 
       <div className="rc-detail__score">
-        <strong className="num" dir="ltr" style={{ color: STATUS[a.status].color }}>
+        <strong className={`num rc-status--${a.status}`} dir="ltr">
           {a.capacityPct}%
         </strong>
         <span>من حمل المحطة يمكن للشبكة استعادته عند فقدها</span>

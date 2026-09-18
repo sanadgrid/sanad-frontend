@@ -3,9 +3,11 @@ import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef } from 'react'
 import type { Status } from '../engine'
 import type { Layers } from '../filters'
-import { CONSTRUCTION_LABEL, fmt, MAP_COLORS, STATUS, SWITCHING_LABEL } from '../labels'
+import { CONSTRUCTION_LABEL, fmt, STATUS, SWITCHING_LABEL } from '../labels'
+import { themeColors, type MapColors } from '../mapTheme'
 import { mapTiles } from '../mapTiles'
 import type { Construction, LatLng, Switching } from '../types'
+import type { Theme } from '../useTheme'
 
 export interface MapStation {
   id: string
@@ -38,10 +40,10 @@ interface NetworkMapProps {
   ties: MapTie[]
   layers: Layers
   selectedId: string | null
+  theme: Theme
   onSelect: (stationId: string) => void
 }
 
-const CASING = '#061b35'
 const OVERHEAD_DASH = '7 7'
 // parallel ties between the same two stations are fanned out by this many degrees
 const FAN_STEP = 0.0024
@@ -81,7 +83,7 @@ function fan(from: LatLng, to: LatLng, i: number, n: number): [number, number][]
   ]
 }
 
-export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, onSelect }: NetworkMapProps) {
+export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, theme, onSelect }: NetworkMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const overlay = useRef<L.LayerGroup | null>(null)
@@ -91,6 +93,15 @@ export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, o
     select.current = onSelect
   }, [onSelect])
 
+  // Every colour goes through a painter, so a change of theme restyles the
+  // layers that exist: no redraw, and the map keeps its view and its tiles.
+  const colors = useRef(themeColors(theme))
+  const painters = useRef<((c: MapColors) => void)[]>([])
+  useEffect(() => {
+    colors.current = themeColors(theme)
+    for (const paint of painters.current) paint(colors.current)
+  }, [theme])
+
   useEffect(() => {
     if (!container.current) return
     const instance = L.map(container.current, { zoomControl: false, minZoom: 8, maxZoom: 16 })
@@ -98,7 +109,7 @@ export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, o
       attribution: mapTiles.attribution,
       subdomains: 'abcd',
       maxNativeZoom: mapTiles.maxNativeZoom,
-      className: mapTiles.darken ? 'rc-map__tiles--darken' : undefined,
+      className: mapTiles.themed ? 'rc-map__tiles--themed' : undefined,
     }).addTo(instance)
     L.control.zoom({ position: 'topleft', zoomInTitle: 'تكبير', zoomOutTitle: 'تصغير' }).addTo(instance)
     map.current = instance
@@ -124,6 +135,14 @@ export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, o
     const group = overlay.current
     if (!group) return
     group.clearLayers()
+    painters.current = []
+
+    const themed = <T extends L.Path>(layer: T, style: (c: MapColors) => L.PathOptions): T => {
+      const paint = (c: MapColors) => layer.setStyle(style(c))
+      paint(colors.current)
+      painters.current.push(paint)
+      return layer.addTo(group)
+    }
 
     if (layers.ties) {
       const parallel = new Map<string, MapTie[]>()
@@ -136,18 +155,18 @@ export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, o
           // keep one orientation per bundle so the fan does not fold onto itself
           const [a, b] = tie.from.id < tie.to.id ? [tie.from, tie.to] : [tie.to, tie.from]
           const path = fan(a.location, b.location, i, bundle.length)
-          const color = isWeak(tie.from) || isWeak(tie.to) ? MAP_COLORS.tieWeak : MAP_COLORS.tie
-          const dashArray = tie.construction === 'overhead' ? OVERHEAD_DASH : undefined
-          const line = L.polyline(path, {
-            color,
-            dashArray,
-            weight: tie.circuits === 2 ? 5.5 : 1.8,
-            opacity: 0.8,
-            lineCap: 'butt',
-          }).addTo(group)
-          // double circuit = two parallel strokes: a dark core splits the wide line
+          const weak = isWeak(tie.from) || isWeak(tie.to)
+          const overhead = tie.construction === 'overhead'
+          const dashArray = overhead ? OVERHEAD_DASH : undefined
+          const line = themed(
+            L.polyline(path, { dashArray, weight: tie.circuits === 2 ? 5.5 : 1.8, lineCap: 'butt' }),
+            (c) => ({ color: weak ? c.tieWeak : overhead ? c.tieOverhead : c.tieUnderground, opacity: c.tieOpacity }),
+          )
+          // double circuit = two parallel strokes: a core in the basemap's tone splits the wide line
           if (tie.circuits === 2)
-            L.polyline(path, { color: CASING, dashArray, weight: 1.8, lineCap: 'butt', interactive: false }).addTo(group)
+            themed(L.polyline(path, { dashArray, weight: 1.8, lineCap: 'butt', interactive: false }), (c) => ({
+              color: c.tieCore,
+            }))
           line.bindTooltip(tieTooltip(tie), { sticky: true, className: 'rc-tooltip' })
         })
       }
@@ -156,24 +175,29 @@ export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, o
     for (const s of stations) {
       const at: [number, number] = [s.location.lat, s.location.lng]
       const radius = radiusOf(s.loadMva)
-      const ring = (extra: number, color: string, dashArray?: string) =>
-        L.circleMarker(at, { radius: radius + extra, color, weight: 2, dashArray, fill: false, interactive: false }).addTo(group)
+      const ring = (extra: number, color: (c: MapColors) => string, dashArray?: string) =>
+        themed(
+          L.circleMarker(at, { radius: radius + extra, weight: 2, dashArray, fill: false, interactive: false }),
+          (c) => ({ color: color(c) }),
+        )
 
-      if (layers.sensitive && s.sensitive) ring(4, MAP_COLORS.sensitive)
-      if (layers.vip && s.vip) ring(layers.sensitive && s.sensitive ? 8 : 4, MAP_COLORS.vip, '3 4')
-      if (s.id === selectedId) ring(12, '#ffffff')
+      if (layers.sensitive && s.sensitive) ring(4, (c) => c.sensitive)
+      if (layers.vip && s.vip) ring(layers.sensitive && s.sensitive ? 8 : 4, (c) => c.vip, '3 4')
+      if (s.id === selectedId) ring(12, (c) => c.selection)
 
-      L.circleMarker(at, {
-        radius,
-        color: CASING,
-        weight: 2,
-        fillColor: STATUS[s.status].color,
-        fillOpacity: 0.95,
-        bubblingMouseEvents: false,
-      })
+      themed(
+        L.circleMarker(at, {
+          radius,
+          fillColor: STATUS[s.status].color,
+          fillOpacity: 0.95,
+          bubblingMouseEvents: false,
+          // the stylesheet hangs the light theme's drop shadow on this
+          className: 'rc-map__station',
+        }),
+        (c) => ({ color: c.markerStroke, weight: c.markerStrokeWeight }),
+      )
         .bindTooltip(stationTooltip(s), { direction: 'top', offset: [0, -radius], className: 'rc-tooltip' })
         .on('click', () => select.current(s.id))
-        .addTo(group)
     }
   }, [stations, ties, layers, selectedId])
 

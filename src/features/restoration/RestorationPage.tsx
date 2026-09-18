@@ -4,6 +4,7 @@ import { listSectors, loadNetwork, seedNetwork, type LoadedNetwork, type SectorS
 import { TopBar } from './components/TopBar'
 import { Dashboard } from './Dashboard'
 import { demoNetwork } from './demoData'
+import { useTheme } from './useTheme'
 import './RestorationPage.css'
 
 interface Toast {
@@ -14,7 +15,20 @@ interface Toast {
 const TOAST_MS = 6000
 const PAGE_TITLE = 'قدرة استعادة الخدمة — SanadGrid'
 
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+// What people read when something fails. The technical reason (provider codes,
+// rule denials) is for the console only.
+const SIGN_IN_FAILED = 'تعذّر تسجيل الدخول. حاول مرة أخرى.'
+const SIGN_IN_CLOSED = 'أُغلقت نافذة تسجيل الدخول قبل إتمام العملية.'
+const SIGN_OUT_FAILED = 'تعذّر تسجيل الخروج. حاول مرة أخرى.'
+const PUBLISH_DONE = 'تم نشر البيانات'
+const PUBLISH_FAILED = 'تعذّر نشر البيانات. تأكد من صلاحياتك وحاول مرة أخرى.'
+
+const CLOSED_POPUP_CODES = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request']
+
+function signInFailure(error: unknown): string {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
+  return CLOSED_POPUP_CODES.includes(code) ? SIGN_IN_CLOSED : SIGN_IN_FAILED
+}
 
 export function RestorationPage() {
   const [sectorId, setSectorId] = useState(demoNetwork.sector.id)
@@ -25,6 +39,7 @@ export function RestorationPage() {
   const [revision, setRevision] = useState(0)
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
+  const [theme, toggleTheme] = useTheme()
 
   useEffect(() => onAuthChange(setUser), [])
 
@@ -67,42 +82,49 @@ export function RestorationPage() {
     return () => clearTimeout(timer)
   }, [toast])
 
-  const run = async (task: () => Promise<void>, done?: string) => {
+  const run = async (task: () => Promise<void>, failed: string | ((error: unknown) => string), done?: string) => {
     setBusy(true)
     try {
       await task()
       if (done) setToast({ kind: 'ok', text: done })
     } catch (error) {
-      setToast({ kind: 'error', text: messageOf(error) })
+      console.error('restoration:', error)
+      setToast({ kind: 'error', text: typeof failed === 'string' ? failed : failed(error) })
     } finally {
       setBusy(false)
     }
   }
 
   const seed = () =>
-    run(async () => {
-      await seedNetwork(demoNetwork)
-      setRevision((r) => r + 1)
-    }, 'تم رفع البيانات التجريبية إلى Firestore.')
+    run(
+      async () => {
+        await seedNetwork(demoNetwork)
+        setRevision((r) => r + 1)
+      },
+      PUBLISH_FAILED,
+      PUBLISH_DONE,
+    )
 
   return (
-    <div className="rc">
+    <div className="rc" data-theme={theme}>
       <TopBar
         source={loaded?.source ?? null}
         sectors={sectors}
         sectorId={sectorId}
         user={user}
         busy={busy}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onSectorChange={setSectorId}
-        onSignIn={() => run(signInWithGoogle)}
-        onSignOut={() => run(signOutUser)}
+        onSignIn={() => run(signInWithGoogle, signInFailure)}
+        onSignOut={() => run(signOutUser, SIGN_OUT_FAILED)}
         onSeed={seed}
       />
 
       <main className="rc-main">
         {loaded ? (
           // a different network starts from clean filters and no selection
-          <Dashboard key={`${loaded.network.sector.id}:${loaded.source}`} network={loaded.network} />
+          <Dashboard key={`${loaded.network.sector.id}:${loaded.source}`} network={loaded.network} theme={theme} />
         ) : (
           <p className="rc-loading" role="status">
             جارٍ تحميل بيانات الشبكة…

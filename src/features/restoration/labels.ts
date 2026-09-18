@@ -28,14 +28,6 @@ export const STATUS: Record<Status, { label: string; range: string; color: strin
   none: { label: 'لا توجد استعادة', range: '0%', color: '#ef476f' },
 }
 
-export const MAP_COLORS = {
-  tie: '#5fe6f0',
-  /** A tie with a limited / unrestorable station at either end. */
-  tieWeak: '#ff6b81',
-  sensitive: '#ff9ecb',
-  vip: '#d7b58a',
-}
-
 export const LIMIT_LABEL: Record<Limit, string> = {
   load: 'كامل حمل المغذي',
   tie: 'سعة خط الربط',

@@ -2,6 +2,7 @@ import { Icon } from '../../../components/Icon'
 import { Logo } from '../../../components/Logo'
 import type { AuthUser } from '../../../services/auth'
 import type { NetworkSource, SectorSummary } from '../../../services/restoration'
+import type { Theme } from '../useTheme'
 
 interface TopBarProps {
   /** `null` while the network is still loading. */
@@ -11,17 +12,34 @@ interface TopBarProps {
   user: AuthUser | null
   /** A sign-in or an upload is in flight. */
   busy: boolean
+  theme: Theme
+  onToggleTheme: () => void
   onSectorChange: (sectorId: string) => void
   onSignIn: () => void
   onSignOut: () => void
   onSeed: () => void
 }
 
-export function TopBar({ source, sectors, sectorId, user, busy, onSectorChange, onSignIn, onSignOut, onSeed }: TopBarProps) {
+export function TopBar({
+  source,
+  sectors,
+  sectorId,
+  user,
+  busy,
+  theme,
+  onToggleTheme,
+  onSectorChange,
+  onSignIn,
+  onSignOut,
+  onSeed,
+}: TopBarProps) {
+  // the button names the theme it switches to
+  const otherTheme = theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'
+
   return (
     <header className="rc-topbar">
       <a className="rc-topbar__brand" href="/" aria-label="SanadGrid — الرئيسية">
-        <Logo size={36} />
+        <Logo size={36} tone={theme === 'dark' ? 'onDark' : 'onLight'} />
       </a>
       <p className="rc-topbar__unit">
         التخطيط التشغيلي <span aria-hidden="true">·</span> <b>قدرة استعادة الخدمة</b>
@@ -31,7 +49,7 @@ export function TopBar({ source, sectors, sectorId, user, busy, onSectorChange, 
         {source && (
           <span className={`rc-badge rc-badge--${source}`}>
             <i aria-hidden="true" />
-            {source === 'demo' ? 'بيانات عامة تجريبية' : <span lang="en">Firestore</span>}
+            {source === 'demo' ? 'بيانات عامة تجريبية' : 'بيانات مباشرة'}
           </span>
         )}
 
@@ -46,10 +64,14 @@ export function TopBar({ source, sectors, sectorId, user, busy, onSectorChange, 
           </select>
         </label>
 
+        <button className="rc-icon-btn rc-icon-btn--bar" type="button" aria-label={otherTheme} title={otherTheme} onClick={onToggleTheme}>
+          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} />
+        </button>
+
         {user && (
           <button className="rc-btn" type="button" disabled={busy} onClick={onSeed}>
             <Icon name="upload" size={15} />
-            رفع البيانات التجريبية إلى <span lang="en">Firestore</span>
+            نشر البيانات التجريبية
           </button>
         )}
 

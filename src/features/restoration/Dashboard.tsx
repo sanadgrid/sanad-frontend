@@ -13,9 +13,11 @@ import { boundsOf, defaultFilters, defaultLayers, matches, type Filters, type La
 import { FORECAST_LABEL, MONTHS_AR } from './labels'
 import { byPriority, summarize } from './summary'
 import type { Conditions, Network } from './types'
+import type { Theme } from './useTheme'
 
 interface DashboardProps {
   network: Network
+  theme: Theme
 }
 
 // The design case of the sector: August at peak, when loads are highest and
@@ -23,7 +25,7 @@ interface DashboardProps {
 const DESIGN_CASE: Conditions = { period: 7, scenario: 'peak' }
 const PRIORITY_ROWS = 8
 
-export function Dashboard({ network }: DashboardProps) {
+export function Dashboard({ network, theme }: DashboardProps) {
   const [conditions, setConditions] = useState(DESIGN_CASE)
   const [filters, setFilters] = useState(defaultFilters)
   const [layers, setLayers] = useState(defaultLayers)
@@ -144,9 +146,10 @@ export function Dashboard({ network }: DashboardProps) {
             ties={ties}
             layers={layers}
             selectedId={selected?.station.id ?? null}
+            theme={theme}
             onSelect={select}
           />
-          <MapLegend layers={layers} />
+          <MapLegend layers={layers} theme={theme} />
         </section>
 
         <StationDetail row={selected} areaName={areaName} onClose={() => setSelectedId(null)} />

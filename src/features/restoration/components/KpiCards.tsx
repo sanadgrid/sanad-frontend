@@ -31,7 +31,7 @@ function Kpi({ label, value, unit, tone, note }: KpiProps) {
 
 // conic-gradient stops built from the status counts
 function donutGradient(summary: Summary): string {
-  if (summary.stations === 0) return 'rgba(255, 255, 255, 0.08)'
+  if (summary.stations === 0) return 'var(--rc-track)'
   let from = 0
   const stops = STATUS_ORDER.map((status) => {
     const to = from + (summary.byStatus[status] / summary.stations) * 100
