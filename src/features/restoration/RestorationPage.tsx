@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { onAuthChange, signInWithGoogle, signOutUser, type AuthUser } from '../../services/auth'
-import { isCurrentUserAdmin } from '../../services/mapLayers'
+import { isCurrentUserAdmin, onAuthChange, signInWithGoogle, signOutUser, type AuthUser } from '../../services/auth'
 import { listSectors, loadNetwork, seedNetwork, type LoadedNetwork, type SectorSummary } from '../../services/restoration'
 import { TopBar } from './components/TopBar'
 import { Dashboard } from './Dashboard'
@@ -13,7 +12,7 @@ import './RestorationPage.css'
 const ImportDialog = lazy(() => import('./components/ImportDialog').then((m) => ({ default: m.ImportDialog })))
 
 interface Toast {
-  kind: 'ok' | 'error'
+  kind: 'ok' | 'error' | 'notice'
   text: string
 }
 
@@ -29,6 +28,10 @@ const PUBLISH_DONE = 'تم نشر البيانات'
 const PUBLISH_FAILED = 'تعذّر نشر البيانات. تأكد من صلاحياتك وحاول مرة أخرى.'
 const LAYER_DELETED = 'تم حذف الطبقة'
 const LAYER_DELETE_FAILED = 'تعذّر حذف الطبقة. تأكد من صلاحياتك وحاول مرة أخرى.'
+const LOAD_NOTICE: Record<NonNullable<LoadedNetwork['notice']>, string> = {
+  stale: 'تعذّر تحديث البيانات الآن. تُعرض آخر نسخة محفوظة.',
+  unavailable: 'تعذّر الوصول إلى البيانات الآن. تُعرض بيانات تجريبية مؤقتاً.',
+}
 
 const CLOSED_POPUP_CODES = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request']
 
@@ -77,9 +80,13 @@ export function RestorationPage() {
 
   useEffect(() => {
     let cancelled = false
-    loadNetwork(sectorId).then((result) => {
-      if (!cancelled) setLoaded(result)
-    })
+    // called once with what can be shown at once, and again if the database holds something newer
+    const show = (result: LoadedNetwork) => {
+      if (cancelled) return
+      setLoaded(result)
+      if (result.notice) setToast({ kind: 'notice', text: LOAD_NOTICE[result.notice] })
+    }
+    loadNetwork(sectorId, show).then(show)
     return () => {
       cancelled = true
     }

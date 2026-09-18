@@ -1,22 +1,14 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
-  Timestamp,
-  where,
-  writeBatch,
-  type DocumentData,
-  type DocumentReference,
-} from 'firebase/firestore'
+import { collection, doc, query, serverTimestamp, setDoc, Timestamp, where, type DocumentData } from 'firebase/firestore'
 import { byteLength, chunkFeatures } from '../features/restoration/import/chunks'
 import { layerIdOf } from '../features/restoration/import/layerId'
 import type { Bbox, CompactFeature, LayerCounts } from '../features/restoration/import/types'
 import type { Visibility } from '../features/restoration/types'
-import { auth, db, isFirebaseConfigured } from '../lib/firebase'
-import { withTimeout } from './restoration'
+import { db, isFirebaseConfigured } from '../lib/firebase'
+import { currentUid, isCurrentUserAdmin } from './auth'
+import { cache, layersKey } from './cache'
+import { applyIndexChanges, sortLayers, type IndexChange } from './layerIndex'
+import { isDenied, isUnreachable, serverDocs, shared, withTimeout } from './reads'
+import { commit, WRITE_OVERHEAD_BYTES, type Write } from './writes'
 
 /** `mapLayers/{id}` — the descriptor of an imported layer; its features live in `mapLayerChunks`. */
 export interface MapLayer {
@@ -47,35 +39,13 @@ export interface LayerUpload {
 
 const LAYERS = 'mapLayers'
 const CHUNKS = 'mapLayerChunks'
+// one document per sector listing its layers, so the list costs one read however long it is
+const INDEX = 'mapLayerIndex'
 // real data never becomes public by being imported
 const RESTRICTED: Visibility = 'restricted'
-// A commit takes at most 500 writes and 10 MiB; stay clear of both.
-const BATCH_OPS = 400
-const BATCH_BYTES = 8_000_000
-// field names, ids and the fixed fields of a write, generously
-const WRITE_OVERHEAD_BYTES = 2_000
-
-interface Write {
-  ref: DocumentReference
-  /** `null` deletes the document. */
-  data: DocumentData | null
-  bytes: number
-}
 
 // Features are immutable once read: a layer ticked off and on again costs nothing.
-const cache = new Map<string, Promise<CompactFeature[]>>()
-
-/** An admin is a user with a document in `admins/`; each user may read only their own. */
-export async function isCurrentUserAdmin(): Promise<boolean> {
-  if (!isFirebaseConfigured) return false
-  try {
-    await auth.authStateReady()
-    const uid = auth.currentUser?.uid
-    return uid ? (await withTimeout(getDoc(doc(db, 'admins', uid)))).exists() : false
-  } catch {
-    return false
-  }
-}
+const features = new Map<string, Promise<CompactFeature[]>>()
 
 function toMapLayer(id: string, data: DocumentData): MapLayer {
   return {
@@ -85,29 +55,97 @@ function toMapLayer(id: string, data: DocumentData): MapLayer {
   }
 }
 
+const sectorFilter = (sectorId: string) => where('sectorId', '==', sectorId)
+
 /**
- * Never throws. Imported layers are restricted, so a visitor has none, and a
- * signed-in user who is not a member of the sector is refused the query — both
- * simply see no imported layers.
+ * The layers the index lists; `null` when the sector has no index yet. A query
+ * rather than a read by id: the rules refuse to look up a document that does
+ * not exist, and "refused" would hide "not built yet".
+ */
+async function readIndex(sectorId: string): Promise<MapLayer[] | null> {
+  const snap = await serverDocs(INDEX, query(collection(db, INDEX), sectorFilter(sectorId)))
+  return snap.empty ? null : sortLayers((snap.docs[0].data().layers ?? []) as MapLayer[])
+}
+
+// one read per layer — only to build an index that is missing
+async function readDescriptors(sectorId: string): Promise<MapLayer[]> {
+  const snap = await serverDocs(LAYERS, query(collection(db, LAYERS), sectorFilter(sectorId)))
+  return snap.docs.map((d) => toMapLayer(d.id, d.data()))
+}
+
+interface IndexUpdate {
+  changes: IndexChange[]
+  written: Promise<MapLayer[]>
+}
+
+// Layers are imported a few at a time, and each import changes the same index
+// document. Updates wait for one another, and the changes that arrive while one
+// is being written go out together in the next.
+const waiting = new Map<string, IndexUpdate>()
+let lastUpdate: Promise<unknown> = Promise.resolve()
+
+async function writeIndex(sectorId: string, changes: IndexChange[]): Promise<MapLayer[]> {
+  // an index that does not exist yet starts from the layers themselves
+  const current = (await readIndex(sectorId)) ?? (await readDescriptors(sectorId))
+  const layers = applyIndexChanges(current, changes)
+  // through JSON: a field that is `undefined` would be refused
+  const plain = JSON.parse(JSON.stringify(layers)) as MapLayer[]
+  await setDoc(doc(db, INDEX, sectorId), { sectorId, visibility: RESTRICTED, layers: plain, updatedAt: serverTimestamp() })
+  cache.set(layersKey(sectorId), await currentUid(), layers)
+  return layers
+}
+
+function updateIndex(sectorId: string, changes: IndexChange[]): Promise<MapLayer[]> {
+  const queued = waiting.get(sectorId)
+  if (queued) {
+    queued.changes.push(...changes)
+    return queued.written
+  }
+  const update: IndexUpdate = { changes: [...changes], written: Promise.resolve([]) }
+  update.written = lastUpdate.then(() => {
+    // from here on, new changes belong to the next update
+    waiting.delete(sectorId)
+    return writeIndex(sectorId, update.changes)
+  })
+  lastUpdate = update.written.catch(() => {})
+  waiting.set(sectorId, update)
+  return update.written
+}
+
+/**
+ * Never throws. Imported layers are restricted, so a visitor has none — and is
+ * not worth a read — and a signed-in user who is not a member of the sector is
+ * refused the query: both simply see no imported layers.
  */
 export async function listMapLayers(sectorId: string): Promise<MapLayer[]> {
   if (!isFirebaseConfigured) return []
-  try {
-    await auth.authStateReady()
-    if (!auth.currentUser) {
-      // nothing read by the previous user outlives their session
-      cache.clear()
-      return []
-    }
-    const snap = await withTimeout(getDocs(query(collection(db, LAYERS), where('sectorId', '==', sectorId))))
-    return snap.docs.map((d) => toMapLayer(d.id, d.data())).sort((a, b) => a.name.localeCompare(b.name, 'ar'))
-  } catch {
+  const uid = await currentUid()
+  if (!uid) {
+    // nothing read by the previous user outlives their session
+    features.clear()
     return []
   }
+  return shared(`layers:${sectorId}:${uid}`, async () => {
+    const key = layersKey(sectorId)
+    const saved = cache.get<MapLayer[]>(key, uid)
+    if (saved && cache.isFresh(saved)) return saved.value
+    try {
+      const listed = await withTimeout(readIndex(sectorId))
+      // only an admin can write the index, so only an admin builds a missing one
+      const layers = listed ?? ((await isCurrentUserAdmin()) ? await updateIndex(sectorId, []) : [])
+      cache.set(key, uid, layers)
+      return layers
+    } catch (error) {
+      console.warn('map layers: the list could not be read —', error)
+      // a refusal is an answer too, and asking again on every load would cost a read each time
+      if (isDenied(error)) cache.set(key, uid, [])
+      return saved && isUnreachable(error) ? saved.value : []
+    }
+  })
 }
 
 const chunksOf = (sectorId: string, layerId: string) =>
-  getDocs(query(collection(db, CHUNKS), where('sectorId', '==', sectorId), where('layerId', '==', layerId)))
+  serverDocs(CHUNKS, query(collection(db, CHUNKS), sectorFilter(sectorId), where('layerId', '==', layerId)))
 
 async function readFeatures(sectorId: string, layerId: string): Promise<CompactFeature[]> {
   const snap = await chunksOf(sectorId, layerId)
@@ -118,32 +156,13 @@ async function readFeatures(sectorId: string, layerId: string): Promise<CompactF
 }
 
 export function loadLayerFeatures(sectorId: string, layerId: string): Promise<CompactFeature[]> {
-  const cached = cache.get(layerId)
+  const cached = features.get(layerId)
   if (cached) return cached
   const pending = readFeatures(sectorId, layerId)
-  cache.set(layerId, pending)
+  features.set(layerId, pending)
   // a failed read is not remembered, so ticking the layer again retries it
-  pending.catch(() => cache.delete(layerId))
+  pending.catch(() => features.delete(layerId))
   return pending
-}
-
-async function commit(writes: Write[], onCommitted: (count: number) => void) {
-  let start = 0
-  while (start < writes.length) {
-    const batch = writeBatch(db)
-    let end = start
-    let bytes = 0
-    while (end < writes.length && end - start < BATCH_OPS && (end === start || bytes + writes[end].bytes <= BATCH_BYTES)) {
-      const { ref, data } = writes[end]
-      if (data) batch.set(ref, data)
-      else batch.delete(ref)
-      bytes += writes[end].bytes
-      end += 1
-    }
-    await batch.commit()
-    onCommitted(end - start)
-    start = end
-  }
 }
 
 const removalsOf = async (sectorId: string, layerId: string): Promise<Write[]> =>
@@ -165,6 +184,7 @@ export async function saveMapLayer(
   const scope = { sectorId, visibility: RESTRICTED }
   const chunks = chunkFeatures(layer.features)
   const { name, path, sourceFile, counts, bbox, color } = layer
+  const descriptor = { ...scope, name, path, sourceFile, counts, bbox, chunks: chunks.length, style: { color } }
 
   const removals = await removalsOf(sectorId, layerId)
   const additions: Write[] = [
@@ -174,11 +194,7 @@ export async function saveMapLayer(
       bytes: byteLength(features) + WRITE_OVERHEAD_BYTES,
     })),
     // last, so a descriptor never announces chunks that were not written
-    {
-      ref: doc(db, LAYERS, layerId),
-      data: { ...scope, name, path, sourceFile, importedAt: serverTimestamp(), counts, bbox, chunks: chunks.length, style: { color } },
-      bytes: WRITE_OVERHEAD_BYTES,
-    },
+    { ref: doc(db, LAYERS, layerId), data: { ...descriptor, importedAt: serverTimestamp() }, bytes: WRITE_OVERHEAD_BYTES },
   ]
 
   const total = removals.length + additions.length
@@ -187,7 +203,9 @@ export async function saveMapLayer(
   // the old chunks go first, in their own commits: a new import may have fewer of them
   await commit(removals, report)
   await commit(additions, report)
-  cache.delete(layerId)
+  features.delete(layerId)
+  // the server's stamp cannot go inside a list; the browser's clock is close enough for the index
+  await updateIndex(sectorId, [{ upsert: { ...descriptor, id: layerId, importedAt: Date.now() } }])
   return layerId
 }
 
@@ -195,6 +213,7 @@ export async function deleteMapLayer(sectorId: string, layerId: string): Promise
   if (!isFirebaseConfigured) throw new Error('map layers: the database is not configured')
   const descriptor: Write = { ref: doc(db, LAYERS, layerId), data: null, bytes: WRITE_OVERHEAD_BYTES }
   // the descriptor goes last: if this fails half-way the layer is still listed and can be deleted again
-  await commit([...(await removalsOf(sectorId, layerId)), descriptor], () => {})
-  cache.delete(layerId)
+  await commit([...(await removalsOf(sectorId, layerId)), descriptor])
+  features.delete(layerId)
+  await updateIndex(sectorId, [{ remove: layerId }])
 }
