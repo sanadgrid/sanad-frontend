@@ -2,7 +2,7 @@
 
 React + Vite + TypeScript، ينشر على Netlify تلقائياً مع كل `push` على `main`.
 
-الباك اند (قواعد Firestore) في ريبو منفصل: [sanad-frontendbackend](https://github.com/sanadgrid/sanad-frontendbackend).
+الباك اند (قواعد Firestore) في ريبو منفصل: [sanad-backend](https://github.com/sanadgrid/sanad-backend).
 
 ## التشغيل محلياً
 
