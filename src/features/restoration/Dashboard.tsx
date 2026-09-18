@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { FilterPanel } from './components/FilterPanel'
+import { ImportedLayersList } from './components/ImportedLayersList'
 import { KpiCards } from './components/KpiCards'
 import { MapLegend } from './components/MapLegend'
 import { Methodology } from './components/Methodology'
@@ -10,14 +11,21 @@ import { StationDetail } from './components/StationDetail'
 import { assessNetwork } from './engine'
 import { downloadCsv } from './exportCsv'
 import { boundsOf, defaultFilters, defaultLayers, matches, type Filters, type Layers, type StationRow } from './filters'
+import type { Bbox } from './import/types'
 import { FORECAST_LABEL, MONTHS_AR } from './labels'
 import { byPriority, summarize } from './summary'
 import type { Conditions, Network } from './types'
+import type { ImportedLayers } from './useMapLayers'
 import type { Theme } from './useTheme'
 
 interface DashboardProps {
   network: Network
   theme: Theme
+  imported: ImportedLayers
+  isAdmin: boolean
+  /** Something is being written; destructive buttons wait. */
+  busy: boolean
+  onDeleteLayer: (layerId: string) => void
 }
 
 // The design case of the sector: August at peak, when loads are highest and
@@ -25,12 +33,14 @@ interface DashboardProps {
 const DESIGN_CASE: Conditions = { period: 7, scenario: 'peak' }
 const PRIORITY_ROWS = 8
 
-export function Dashboard({ network, theme }: DashboardProps) {
+export function Dashboard({ network, theme, imported, isAdmin, busy, onDeleteLayer }: DashboardProps) {
   const [conditions, setConditions] = useState(DESIGN_CASE)
   const [filters, setFilters] = useState(defaultFilters)
   const [layers, setLayers] = useState(defaultLayers)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // a fresh object every time, so asking for the same layer twice moves the map twice
+  const [focus, setFocus] = useState<{ bbox: Bbox } | null>(null)
 
   const { sector } = network
   const assessments = useMemo(() => assessNetwork(network, conditions), [network, conditions])
@@ -127,6 +137,17 @@ export function Dashboard({ network, theme }: DashboardProps) {
             filters={filters}
             layers={layers}
             bounds={bounds}
+            importedLayers={
+              imported.layers.length > 0 && (
+                <ImportedLayersList
+                  imported={imported}
+                  canDelete={isAdmin}
+                  busy={busy}
+                  onZoom={(bbox) => setFocus({ bbox })}
+                  onDelete={onDeleteLayer}
+                />
+              )
+            }
             onConditions={(patch) => setConditions((c) => ({ ...c, ...patch }))}
             onFilters={(patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch }))}
             onLayers={(patch: Partial<Layers>) => setLayers((l) => ({ ...l, ...patch }))}
@@ -134,6 +155,7 @@ export function Dashboard({ network, theme }: DashboardProps) {
               setConditions(DESIGN_CASE)
               setFilters(defaultFilters)
               setLayers(defaultLayers)
+              imported.hideAll()
             }}
           />
         </div>
@@ -145,6 +167,8 @@ export function Dashboard({ network, theme }: DashboardProps) {
             stations={stations}
             ties={ties}
             layers={layers}
+            imported={imported.visible}
+            focus={focus}
             selectedId={selected?.station.id ?? null}
             theme={theme}
             onSelect={select}

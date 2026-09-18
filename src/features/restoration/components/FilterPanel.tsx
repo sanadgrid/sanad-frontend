@@ -13,6 +13,8 @@ interface FilterPanelProps {
   filters: Filters
   layers: Layers
   bounds: Bounds
+  /** The sector's imported layers, when the user may see any. */
+  importedLayers?: ReactNode
   onConditions: (patch: Partial<Conditions>) => void
   onFilters: (patch: Partial<Filters>) => void
   onLayers: (patch: Partial<Layers>) => void
@@ -79,6 +81,7 @@ export function FilterPanel({
   filters,
   layers,
   bounds,
+  importedLayers,
   onConditions,
   onFilters,
   onLayers,
@@ -220,6 +223,7 @@ export function FilterPanel({
         <Toggle label="المشتركون الحساسون" checked={layers.sensitive} onChange={(sensitive) => onLayers({ sensitive })} />
         <Toggle label="كبار المشتركين (VIP)" checked={layers.vip} onChange={(vip) => onLayers({ vip })} />
         <Toggle label="خطوط الربط" checked={layers.ties} onChange={(ties) => onLayers({ ties })} />
+        {importedLayers}
       </fieldset>
 
       <button className="rc-btn rc-btn--block" type="button" onClick={onReset}>

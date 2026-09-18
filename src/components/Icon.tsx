@@ -20,6 +20,11 @@ const paths = {
   upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M17 8l-5-5-5 5 M12 3v12',
   sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z M12 1v2 M12 21v2 M4.22 4.22l1.42 1.42 M18.36 18.36l1.42 1.42 M1 12h2 M21 12h2 M4.22 19.78l1.42-1.42 M18.36 5.64l1.42-1.42',
   moon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z',
+  trash: 'M3 6h18 M8 6V4h8v2 M19 6l-1 14H6L5 6 M10 11v6 M14 11v6',
+  crosshair: 'M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M12 2v4 M12 18v4 M2 12h4 M18 12h4',
+  check: 'M20 6 9 17l-5-5',
+  alert: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 8v5 M12 16.5v.01',
+  lock: 'M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4',
 } as const
 
 export type IconName = keyof typeof paths

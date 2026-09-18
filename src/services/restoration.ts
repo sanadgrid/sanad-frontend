@@ -37,7 +37,7 @@ const demoSectors: SectorSummary[] = [
 const toLatLng = (point: GeoPoint): LatLng => ({ lat: point.latitude, lng: point.longitude })
 const toGeoPoint = ({ lat, lng }: LatLng) => new GeoPoint(lat, lng)
 
-function withTimeout<T>(promise: Promise<T>): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>): Promise<T> {
   return Promise.race([
     promise,
     new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Firestore read timed out')), READ_TIMEOUT_MS)),

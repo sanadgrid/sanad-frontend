@@ -1,11 +1,16 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { onAuthChange, signInWithGoogle, signOutUser, type AuthUser } from '../../services/auth'
+import { isCurrentUserAdmin } from '../../services/mapLayers'
 import { listSectors, loadNetwork, seedNetwork, type LoadedNetwork, type SectorSummary } from '../../services/restoration'
 import { TopBar } from './components/TopBar'
 import { Dashboard } from './Dashboard'
 import { demoNetwork } from './demoData'
+import { useMapLayers } from './useMapLayers'
 import { useTheme } from './useTheme'
 import './RestorationPage.css'
+
+// Only admins ever open it, so the file reader is not part of everyone's download.
+const ImportDialog = lazy(() => import('./components/ImportDialog').then((m) => ({ default: m.ImportDialog })))
 
 interface Toast {
   kind: 'ok' | 'error'
@@ -22,6 +27,8 @@ const SIGN_IN_CLOSED = 'أُغلقت نافذة تسجيل الدخول قبل �
 const SIGN_OUT_FAILED = 'تعذّر تسجيل الخروج. حاول مرة أخرى.'
 const PUBLISH_DONE = 'تم نشر البيانات'
 const PUBLISH_FAILED = 'تعذّر نشر البيانات. تأكد من صلاحياتك وحاول مرة أخرى.'
+const LAYER_DELETED = 'تم حذف الطبقة'
+const LAYER_DELETE_FAILED = 'تعذّر حذف الطبقة. تأكد من صلاحياتك وحاول مرة أخرى.'
 
 const CLOSED_POPUP_CODES = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request']
 
@@ -35,6 +42,8 @@ export function RestorationPage() {
   const [sectors, setSectors] = useState<SectorSummary[]>([])
   const [loaded, setLoaded] = useState<LoadedNetwork | null>(null)
   const [user, setUser] = useState<AuthUser | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [importing, setImporting] = useState(false)
   // bumped after an upload so the network is read again
   const [revision, setRevision] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -77,6 +86,20 @@ export function RestorationPage() {
   }, [sectorId, uid, revision])
 
   useEffect(() => {
+    let cancelled = false
+    isCurrentUserAdmin().then((admin) => {
+      if (!cancelled) setIsAdmin(admin)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [uid])
+
+  // the layers follow the network on screen, which is the demo sector when the chosen one has no data
+  const sector = loaded?.network.sector
+  const mapLayers = useMapLayers(sector?.id, uid)
+
+  useEffect(() => {
     if (!toast) return
     const timer = setTimeout(() => setToast(null), TOAST_MS)
     return () => clearTimeout(timer)
@@ -113,24 +136,46 @@ export function RestorationPage() {
         sectorId={sectorId}
         user={user}
         busy={busy}
+        isAdmin={isAdmin && Boolean(sector)}
         theme={theme}
         onToggleTheme={toggleTheme}
         onSectorChange={setSectorId}
         onSignIn={() => run(signInWithGoogle, signInFailure)}
         onSignOut={() => run(signOutUser, SIGN_OUT_FAILED)}
         onSeed={seed}
+        onImport={() => setImporting(true)}
       />
 
       <main className="rc-main">
         {loaded ? (
           // a different network starts from clean filters and no selection
-          <Dashboard key={`${loaded.network.sector.id}:${loaded.source}`} network={loaded.network} theme={theme} />
+          <Dashboard
+            key={`${loaded.network.sector.id}:${loaded.source}`}
+            network={loaded.network}
+            theme={theme}
+            imported={mapLayers}
+            isAdmin={isAdmin}
+            busy={busy}
+            onDeleteLayer={(layerId) => run(() => mapLayers.remove(layerId), LAYER_DELETE_FAILED, LAYER_DELETED)}
+          />
         ) : (
           <p className="rc-loading" role="status">
             جارٍ تحميل بيانات الشبكة…
           </p>
         )}
       </main>
+
+      {importing && sector && (
+        <Suspense fallback={null}>
+          <ImportDialog
+            sectorId={sector.id}
+            sectorName={sector.nameAr}
+            center={sector.center}
+            onImported={mapLayers.refresh}
+            onClose={() => setImporting(false)}
+          />
+        </Suspense>
+      )}
 
       {toast && (
         <div className={`rc-toast rc-toast--${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}>

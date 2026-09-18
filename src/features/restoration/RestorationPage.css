@@ -898,14 +898,25 @@
   background: var(--rc-raised-hover);
 }
 
+/* The tile credit is a licence condition, so it is always there — just quiet. */
 .rc-map .leaflet-control-attribution {
+  padding: 1px 7px;
+  /* the map is laid out LTR: this is the corner that faces the map */
+  border-top-left-radius: 8px;
   background: var(--rc-attribution);
   color: var(--rc-muted);
   font-size: 10px;
+  line-height: 1.6;
 }
 
 .rc-map .leaflet-control-attribution a {
-  color: var(--rc-text-2);
+  color: inherit;
+  text-decoration: none;
+}
+
+.rc-map .leaflet-control-attribution a:hover,
+.rc-map .leaflet-control-attribution a:focus-visible {
+  text-decoration: underline;
 }
 
 .rc-map .leaflet-interactive:focus {
@@ -924,6 +935,45 @@
 
 .leaflet-tooltip.rc-tooltip:before {
   display: none;
+}
+
+/* Imported layers are painted on a canvas under the network. The network's SVG
+   covers the whole map, so only its shapes may take the pointer — not its box. */
+.rc-map .leaflet-overlay-pane > svg {
+  pointer-events: none;
+}
+
+.leaflet-popup.rc-popup .leaflet-popup-content-wrapper,
+.leaflet-popup.rc-popup .leaflet-popup-tip {
+  border: 1px solid var(--rc-line-strong);
+  background: var(--rc-raised);
+  color: var(--rc-text);
+  box-shadow: var(--rc-shadow-pop);
+}
+
+.leaflet-popup.rc-popup .leaflet-popup-content-wrapper {
+  border-radius: 12px;
+}
+
+.leaflet-popup.rc-popup .leaflet-popup-content {
+  margin: 12px 14px;
+  font: 12.5px/1.8 var(--font-ar);
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rc-scrollbar) transparent;
+}
+
+.leaflet-popup.rc-popup b {
+  color: var(--rc-text-strong);
+}
+
+.leaflet-popup.rc-popup p {
+  margin: 4px 0 0;
+  color: var(--rc-text-2);
+}
+
+.rc-map .leaflet-popup.rc-popup a.leaflet-popup-close-button {
+  color: var(--rc-muted);
 }
 
 /* a strip under the map rather than a box over it: it never hides a station */
@@ -1360,6 +1410,487 @@
   color: var(--rc-text-2);
 }
 
+/* ---------- imported map layers ---------- */
+.rc-link {
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--rc-accent-strong);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rc-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.rc-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rc-link--danger {
+  color: var(--rc-bad-text);
+}
+
+.rc-icon-btn--small {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
+.rc-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.rc-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--rc-text-2);
+  cursor: pointer;
+}
+
+.rc-check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--rc-accent);
+  cursor: inherit;
+}
+
+.rc-check:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rc-check bdi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-spinner {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--rc-track);
+  border-top-color: var(--rc-accent);
+  border-radius: 50%;
+  animation: rc-spin 0.8s linear infinite;
+}
+
+@keyframes rc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.rc-imported {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--rc-line-strong);
+}
+
+.rc-imported__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rc-imported__list {
+  display: grid;
+  gap: 2px;
+  max-height: 264px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rc-scrollbar) transparent;
+}
+
+.rc-imported__list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+}
+
+.rc-imported__list .rc-check {
+  flex: 1;
+}
+
+.rc-imported__swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rc-swatch);
+}
+
+.rc[data-theme='dark'] .rc-imported__swatch {
+  background: var(--rc-swatch-dark);
+}
+
+.rc-imported__count {
+  font-size: 11.5px;
+  color: var(--rc-faint);
+}
+
+.rc-imported__failed {
+  font-size: 11.5px;
+  color: var(--rc-bad-text);
+  white-space: nowrap;
+}
+
+.rc-imported__list li.rc-imported__confirm {
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--rc-bad-soft);
+  font-size: 12.5px;
+  color: var(--rc-text);
+}
+
+.rc-imported__confirm span {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- import dialog ---------- */
+.rc-dialog {
+  display: none;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  width: min(720px, 100% - 24px);
+  max-height: min(820px, 100% - 24px);
+  padding: 0;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: var(--radius);
+  background: var(--rc-raised);
+  color: var(--rc-text);
+  box-shadow: var(--rc-shadow-pop);
+  overflow: hidden;
+}
+
+.rc-dialog[open] {
+  display: grid;
+}
+
+/* the window takes the focus itself while its buttons are disabled */
+.rc-dialog:focus-visible {
+  outline: none;
+}
+
+.rc-dialog::backdrop {
+  background: rgba(3, 13, 28, 0.55);
+  backdrop-filter: blur(3px);
+}
+
+.rc-dialog__head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--rc-line-soft);
+}
+
+.rc-dialog__head h2 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--rc-heading);
+}
+
+.rc-dialog__head p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--rc-muted);
+}
+
+.rc-dialog__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 12px;
+  min-height: 220px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rc-scrollbar) transparent;
+}
+
+.rc-dialog__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--rc-line-soft);
+}
+
+/* nothing to press while layers are being written */
+.rc-dialog__foot:empty {
+  display: none;
+}
+
+.rc-import__pick {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 34px 20px;
+  border: 1.5px dashed var(--rc-line-strong);
+  border-radius: 14px;
+  background: var(--rc-inset);
+  color: var(--rc-accent-strong);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.rc-import__pick:hover,
+.rc-import__pick:focus-within {
+  border-color: var(--rc-accent-line);
+  background: var(--rc-accent-soft);
+}
+
+.rc-import__pick b {
+  font-size: 14.5px;
+  color: var(--rc-text);
+}
+
+.rc-import__pick span {
+  font-size: 12.5px;
+  color: var(--rc-muted);
+}
+
+.rc-import__pick input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.rc-import__error,
+.rc-import__notice,
+.rc-import__file,
+.rc-import__summary p {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.rc-import__error svg,
+.rc-import__notice svg,
+.rc-import__file svg,
+.rc-import__summary svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.rc-import__error {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--rc-bad-soft);
+  color: var(--rc-bad-text);
+}
+
+.rc-import__notice {
+  margin: 0 20px 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--rc-warn-soft);
+  color: var(--rc-warn-text);
+  font-weight: 600;
+}
+
+.rc-import__file {
+  color: var(--rc-text-2);
+  overflow-wrap: anywhere;
+}
+
+.rc-import__reading {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  min-height: 180px;
+  text-align: center;
+  color: var(--rc-muted);
+}
+
+.rc-import__reading p,
+.rc-import__overall p,
+.rc-import__bar p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.rc-import__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--rc-inset);
+}
+
+.rc-import__bar-actions {
+  display: flex;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.rc-import__counts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: var(--rc-muted);
+  white-space: nowrap;
+}
+
+.rc-import__counts b {
+  font-weight: 600;
+  color: var(--rc-text-2);
+}
+
+/* in a list the three counts line up as columns */
+.rc-import__list .rc-import__counts span {
+  min-width: 66px;
+}
+
+.rc-import__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rc-import__list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 14px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--rc-line-soft);
+}
+
+.rc-import__note {
+  grid-column: 1 / -1;
+  padding-inline-start: 24px;
+  font-size: 12px;
+  color: var(--rc-warn-text);
+}
+
+.rc-import__overall,
+.rc-import__summary {
+  display: grid;
+  gap: 8px;
+}
+
+.rc-import__overall small {
+  font-size: 12px;
+  color: var(--rc-muted);
+}
+
+.rc-import__name {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-import__job .rc-progress {
+  grid-column: 1 / -1;
+  height: 4px;
+}
+
+.rc-import__state {
+  font-size: 12px;
+  color: var(--rc-muted);
+}
+
+.rc-import__job--done .rc-import__state {
+  color: var(--rc-ok-text);
+}
+
+.rc-import__job--failed .rc-import__state {
+  color: var(--rc-bad-text);
+}
+
+.rc-progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: 99px;
+  background: var(--rc-track);
+  overflow: hidden;
+  appearance: none;
+}
+
+.rc-progress::-webkit-progress-bar {
+  background: var(--rc-track);
+}
+
+.rc-progress::-webkit-progress-value {
+  border-radius: 99px;
+  background: var(--rc-accent);
+  transition: width 0.3s;
+}
+
+.rc-progress::-moz-progress-bar {
+  border-radius: 99px;
+  background: var(--rc-accent);
+}
+
+/* no value yet: a band sweeps along the track */
+.rc-progress:indeterminate {
+  background: linear-gradient(90deg, var(--rc-accent), var(--rc-accent)) 0 0 / 40% 100% no-repeat var(--rc-track);
+  animation: rc-sweep 1.2s ease-in-out infinite alternate;
+}
+
+.rc-progress:indeterminate::-webkit-progress-bar {
+  background: transparent;
+}
+
+.rc-progress:indeterminate::-moz-progress-bar {
+  background: transparent;
+}
+
+@keyframes rc-sweep {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-spinner,
+  .rc-progress:indeterminate {
+    animation-duration: 4s;
+  }
+}
+
 /* ---------- toast ---------- */
 .rc-toast {
   position: fixed;
@@ -1468,6 +1999,28 @@
 @media (max-width: 480px) {
   .rc-kpis {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rc-dialog__head,
+  .rc-dialog__body,
+  .rc-dialog__foot {
+    padding-inline: 14px;
+  }
+
+  .rc-import__notice {
+    margin-inline: 14px;
+  }
+
+  .rc-import__list li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rc-import__job .rc-import__state {
+    grid-row: 2;
+  }
+
+  .rc-dialog__foot .rc-btn {
+    flex: 1 1 auto;
   }
 
   .rc-stages li {

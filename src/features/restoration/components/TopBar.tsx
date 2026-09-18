@@ -12,12 +12,15 @@ interface TopBarProps {
   user: AuthUser | null
   /** A sign-in or an upload is in flight. */
   busy: boolean
+  /** Admins may import map layers. */
+  isAdmin: boolean
   theme: Theme
   onToggleTheme: () => void
   onSectorChange: (sectorId: string) => void
   onSignIn: () => void
   onSignOut: () => void
   onSeed: () => void
+  onImport: () => void
 }
 
 export function TopBar({
@@ -26,12 +29,14 @@ export function TopBar({
   sectorId,
   user,
   busy,
+  isAdmin,
   theme,
   onToggleTheme,
   onSectorChange,
   onSignIn,
   onSignOut,
   onSeed,
+  onImport,
 }: TopBarProps) {
   // the button names the theme it switches to
   const otherTheme = theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'
@@ -67,6 +72,13 @@ export function TopBar({
         <button className="rc-icon-btn rc-icon-btn--bar" type="button" aria-label={otherTheme} title={otherTheme} onClick={onToggleTheme}>
           <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} />
         </button>
+
+        {isAdmin && (
+          <button className="rc-btn" type="button" disabled={busy} onClick={onImport}>
+            <Icon name="layers" size={15} />
+            استيراد طبقات الخريطة
+          </button>
+        )}
 
         {user && (
           <button className="rc-btn" type="button" disabled={busy} onClick={onSeed}>

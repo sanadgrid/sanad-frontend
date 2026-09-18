@@ -4,7 +4,9 @@
 // provider you hold a key for — e.g. CARTO — without touching the code.
 
 const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+// The credit is a condition of using the tiles: it stays visible, and its link carries the full notice.
+const OSM_ATTRIBUTION =
+  '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>'
 
 const customUrl = import.meta.env.VITE_MAP_TILE_URL
 

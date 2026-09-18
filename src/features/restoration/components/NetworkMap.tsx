@@ -3,11 +3,15 @@ import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef } from 'react'
 import type { Status } from '../engine'
 import type { Layers } from '../filters'
+import type { Bbox } from '../import/types'
 import { CONSTRUCTION_LABEL, fmt, STATUS, SWITCHING_LABEL } from '../labels'
+import { layerColor } from '../layerPalette'
 import { themeColors, type MapColors } from '../mapTheme'
 import { mapTiles } from '../mapTiles'
 import type { Construction, LatLng, Switching } from '../types'
+import type { VisibleLayer } from '../useMapLayers'
 import type { Theme } from '../useTheme'
+import { describeOnMap, drawImportedLayer, IMPORTED_PANE, IMPORTED_PANE_Z, paintImportedLayer } from './importedLayer'
 
 export interface MapStation {
   id: string
@@ -39,9 +43,20 @@ interface NetworkMapProps {
   stations: MapStation[]
   ties: MapTie[]
   layers: Layers
+  /** Imported layers that are ticked and loaded, drawn under the network. */
+  imported: VisibleLayer[]
+  /** Set to move the view to an area; a new object moves it again. */
+  focus: { bbox: Bbox } | null
   selectedId: string | null
   theme: Theme
   onSelect: (stationId: string) => void
+}
+
+interface DrawnLayer {
+  group: L.FeatureGroup
+  /** What the group was built from: a re-import brings a new array, a re-render does not. */
+  features: VisibleLayer['features']
+  color: string
 }
 
 const OVERHEAD_DASH = '7 7'
@@ -83,10 +98,24 @@ function fan(from: LatLng, to: LatLng, i: number, n: number): [number, number][]
   ]
 }
 
-export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, theme, onSelect }: NetworkMapProps) {
+export function NetworkMap({
+  center,
+  zoom,
+  stations,
+  ties,
+  layers,
+  imported,
+  focus,
+  selectedId,
+  theme,
+  onSelect,
+}: NetworkMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const overlay = useRef<L.LayerGroup | null>(null)
+  // thousands of imported shapes are painted on one canvas instead of one SVG node each
+  const canvas = useRef<L.Renderer | null>(null)
+  const drawn = useRef(new Map<string, DrawnLayer>())
   // the latest callback without redrawing every marker when its identity changes
   const select = useRef(onSelect)
   useEffect(() => {
@@ -112,8 +141,13 @@ export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, t
       className: mapTiles.themed ? 'rc-map__tiles--themed' : undefined,
     }).addTo(instance)
     L.control.zoom({ position: 'topleft', zoomInTitle: 'تكبير', zoomOutTitle: 'تصغير' }).addTo(instance)
+    // the credit of the tiles stays; the library's own prefix is not needed
+    instance.attributionControl.setPrefix(false)
+    instance.createPane(IMPORTED_PANE).style.zIndex = String(IMPORTED_PANE_Z)
+    canvas.current = L.canvas({ pane: IMPORTED_PANE, padding: 0.5, tolerance: 4 })
     map.current = instance
     overlay.current = L.layerGroup().addTo(instance)
+    const importedLayers = drawn.current
 
     // the grid can resize the container after Leaflet has measured it
     const observer = new ResizeObserver(() => instance.invalidateSize())
@@ -124,6 +158,8 @@ export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, t
       instance.remove()
       map.current = null
       overlay.current = null
+      canvas.current = null
+      importedLayers.clear()
     }
   }, [])
 
@@ -200,6 +236,43 @@ export function NetworkMap({ center, zoom, stations, ties, layers, selectedId, t
         .on('click', () => select.current(s.id))
     }
   }, [stations, ties, layers, selectedId])
+
+  // Imported layers are kept apart from the network overlay: a filter or a
+  // selection redraws the stations, never these, and a theme switch only restyles them.
+  useEffect(() => {
+    const instance = map.current
+    const renderer = canvas.current
+    if (!instance || !renderer) return
+    for (const [id, { group, features }] of drawn.current) {
+      if (imported.some((layer) => layer.id === id && layer.features === features)) continue
+      group.remove()
+      drawn.current.delete(id)
+    }
+    for (const { id, features, color } of imported) {
+      if (drawn.current.has(id)) continue
+      const group = drawImportedLayer(features, renderer)
+      describeOnMap(group, instance)
+      drawn.current.set(id, { group, features, color })
+    }
+    const rim = themeColors(theme).markerStroke
+    for (const { group, color } of drawn.current.values()) {
+      paintImportedLayer(group, { color: layerColor(color, theme), rim })
+      // added only once painted, so a layer never flashes in Leaflet's default blue
+      group.addTo(instance)
+    }
+  }, [imported, theme])
+
+  useEffect(() => {
+    if (!focus) return
+    const [west, south, east, north] = focus.bbox
+    map.current?.fitBounds(
+      [
+        [south, west],
+        [north, east],
+      ],
+      { padding: [28, 28], maxZoom: 15 },
+    )
+  }, [focus])
 
   return <div className="rc-map__canvas" ref={container} dir="ltr" role="application" aria-label="خريطة محطات القطاع" />
 }
