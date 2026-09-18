@@ -32,10 +32,13 @@ npm run dev
 src/
   app/        غلاف التطبيق: التوجيه والـ providers
   features/   شاشات ومزايا، كل ميزة في مجلدها (features/home, ...)
+  components/ مكونات واجهة مشتركة بين المزايا (Logo, Icon) — بدون بيانات
   services/   الوصول للبيانات — المكان الوحيد اللي يكلم Firestore
   lib/        تهيئة البنية التحتية (firebase.ts)
 ```
 
+- نصوص وأرقام الصفحة الرئيسية كلها في `src/features/home/content.ts` — عدّلها هناك بدون لمس التصميم.
+- ألوان وخطوط الهوية في `src/index.css`، وملفات اللوقو الجاهزة في `public/brand/`.
 - المكونات في `features/` ما تستدعي Firestore مباشرة؛ تنادي دوال من `services/`.
 - أي collection جديدة = ملف في `services/` هنا + قاعدة في `firestore.rules` في ريبو الباك اند.
 - مفاتيح الـ AI أو أي سر ما تنحط هنا أبداً — كل شي في الفرونت مكشوف للمتصفح. استدعاءات الـ LLM تمر عبر Cloud Function في ريبو الباك اند.
