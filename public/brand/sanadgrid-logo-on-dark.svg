@@ -1,16 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" role="img" aria-label="SanadGrid">
-  <defs>
-    <linearGradient id="g" x1="6" y1="2" x2="58" y2="62" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0A3B8F"/>
-      <stop offset="1" stop-color="#00B3C6"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="16" fill="url(#g)"/>
-  <path d="M44 16H28a8 8 0 0 0 0 16h8a8 8 0 0 1 0 16H20" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="44" cy="16" r="5.5" fill="#fff"/>
-  <circle cx="44" cy="16" r="2.25" fill="#0A3B8F"/>
-  <circle cx="20" cy="48" r="5.5" fill="#fff"/>
-  <circle cx="20" cy="48" r="2.25" fill="#00B3C6"/>
+  <defs><linearGradient id="sg-bg" x1="4" y1="0" x2="60" y2="64" gradientUnits="userSpaceOnUse"><stop stop-color="#06245C"/><stop offset=".55" stop-color="#0A5CC2"/><stop offset="1" stop-color="#00B8CC"/></linearGradient>
+    <radialGradient id="sg-glow"><stop stop-color="#B6FBFF" stop-opacity=".95"/><stop offset="1" stop-color="#5FE6F0" stop-opacity="0"/></radialGradient>
+    <clipPath id="sg-clip"><rect width="64" height="64" rx="15"/></clipPath></defs>
+  <rect width="64" height="64" rx="15" fill="url(#sg-bg)"/>
+  <path d="M8 0V64M0 8H64M16 0V64M0 16H64M24 0V64M0 24H64M32 0V64M0 32H64M40 0V64M0 40H64M48 0V64M0 48H64M56 0V64M0 56H64" clip-path="url(#sg-clip)" stroke="#fff" stroke-opacity=".09" stroke-width=".6" fill="none"/>
+  <g fill="#fff"><rect x="6.15" y="42.6" width="51.7" height="4.7" rx="0.9"/><rect x="15.55" y="23.8" width="4.7" height="23.5" rx="0.9"/><rect x="6.15" y="23.8" width="14.1" height="4.7" rx="0.9"/><rect x="24.95" y="28.5" width="4.7" height="18.8" rx="0.9"/><rect x="34.35" y="28.5" width="4.7" height="18.8" rx="0.9"/><rect x="43.75" y="28.5" width="4.7" height="18.8" rx="0.9"/><rect x="53.15" y="28.5" width="4.7" height="18.8" rx="0.9"/></g>
+  <circle cx="27.3" cy="21.45" r="7.5" fill="url(#sg-glow)"/>
+  <circle cx="27.3" cy="21.45" r="2.9" fill="#D9FDFF"/>
   <text x="80" y="38" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="34" font-weight="800" letter-spacing="-1.4" fill="#FFFFFF">sanad<tspan fill="#00B3C6">grid</tspan></text>
   <text x="82" y="56" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="9.5" font-weight="600" letter-spacing="2.3" fill="#9DB5CC">POWER TRANSMISSION SOLUTIONS</text>
 </svg>

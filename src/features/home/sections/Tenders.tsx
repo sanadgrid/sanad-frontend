@@ -1,5 +1,6 @@
 import { Icon } from '../../../components/Icon'
 import { tenders, tenderStatusLabel } from '../content'
+import { trackGlow } from '../glow'
 
 export function Tenders() {
   return (
@@ -14,9 +15,9 @@ export function Tenders() {
             الأعمال المطروحة ومراحل التقييم والإسناد في مسار واحد، من تجهيز نطاق العمل حتى الترسية.
           </p>
         </div>
-        <div className="tenders">
+        <div className="tenders" onPointerMove={trackGlow}>
           {tenders.map((t, i) => (
-            <article className="tender reveal" key={t.ref} style={{ transitionDelay: `${i * 70}ms` }}>
+            <article className="tender reveal" data-glow key={t.ref} style={{ transitionDelay: `${i * 70}ms` }}>
               <div className="tender__top">
                 <span className={`tag tag--${t.status}`}>{tenderStatusLabel[t.status]}</span>
                 <span className="tender__ref num" dir="ltr">

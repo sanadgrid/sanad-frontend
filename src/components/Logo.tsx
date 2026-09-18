@@ -8,33 +8,58 @@ interface LogoProps {
   tone?: 'onDark' | 'onLight'
 }
 
-// The mark: an "S" drawn as a transmission line routed between two substations.
+// The mark: «سند» in square Kufic — a script drawn on a grid. The baseline is the
+// transmission line and the dot of the ن is an energised node.
+// [x, y, width, height] on a 64×64 tile; pieces overlap so no seams show.
+const strokes = [
+  [6.15, 42.6, 51.7, 4.7], // baseline
+  [15.55, 23.8, 4.7, 23.5], // د
+  [6.15, 23.8, 14.1, 4.7],
+  [24.95, 28.5, 4.7, 18.8], // ن
+  [34.35, 28.5, 4.7, 18.8], // س
+  [43.75, 28.5, 4.7, 18.8],
+  [53.15, 28.5, 4.7, 18.8],
+]
+const node = { cx: 27.3, cy: 21.45 }
+const gridLines = Array.from({ length: 7 }, (_, i) => `M${8 * (i + 1)} 0V64M0 ${8 * (i + 1)}H64`).join('')
+
 // Static copies for use outside React live in public/brand/.
 export function Logo({ size = 40, withWordmark = true, tone = 'onDark' }: LogoProps) {
-  const gradientId = useId()
+  const id = useId()
 
   return (
     <span className={`logo logo--${tone}`} dir="ltr">
       <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
         <defs>
-          <linearGradient id={gradientId} x1="6" y1="2" x2="58" y2="62" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#0A3B8F" />
-            <stop offset="1" stopColor="#00B3C6" />
+          <linearGradient id={`${id}bg`} x1="4" y1="0" x2="60" y2="64" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#06245C" />
+            <stop offset=".55" stopColor="#0A5CC2" />
+            <stop offset="1" stopColor="#00B8CC" />
           </linearGradient>
+          <radialGradient id={`${id}glow`}>
+            <stop stopColor="#B6FBFF" stopOpacity=".95" />
+            <stop offset="1" stopColor="#5FE6F0" stopOpacity="0" />
+          </radialGradient>
+          <clipPath id={`${id}clip`}>
+            <rect width="64" height="64" rx="15" />
+          </clipPath>
         </defs>
-        <rect width="64" height="64" rx="16" fill={`url(#${gradientId})`} />
+        <rect width="64" height="64" rx="15" fill={`url(#${id}bg)`} />
         <path
-          d="M44 16H28a8 8 0 0 0 0 16h8a8 8 0 0 1 0 16H20"
-          fill="none"
+          d={gridLines}
+          clipPath={`url(#${id}clip)`}
           stroke="#fff"
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          strokeOpacity=".09"
+          strokeWidth=".6"
+          fill="none"
         />
-        <circle cx="44" cy="16" r="5.5" fill="#fff" />
-        <circle cx="44" cy="16" r="2.25" fill="#0A3B8F" />
-        <circle cx="20" cy="48" r="5.5" fill="#fff" />
-        <circle cx="20" cy="48" r="2.25" fill="#00B3C6" />
+        <g fill="#fff">
+          {strokes.map(([x, y, width, height]) => (
+            <rect key={`${x}-${y}`} x={x} y={y} width={width} height={height} rx=".9" />
+          ))}
+        </g>
+        <circle className="logo__glow" {...node} r="7.5" fill={`url(#${id}glow)`} />
+        <circle {...node} r="2.9" fill="#D9FDFF" />
       </svg>
       {withWordmark && (
         <span className="logo__text">

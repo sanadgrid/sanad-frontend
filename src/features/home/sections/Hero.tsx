@@ -1,6 +1,8 @@
+import type { PointerEvent } from 'react'
 import { Icon } from '../../../components/Icon'
 import { CountUp } from '../CountUp'
 import { heroStats } from '../content'
+import { trackGlow } from '../glow'
 import { useLiveReadings } from '../useLiveReadings'
 
 const towers = [
@@ -64,10 +66,30 @@ function HeroScene() {
   )
 }
 
+// Tilts the panel toward the pointer; the CSS reads --rx / --ry.
+function tilt(e: PointerEvent<HTMLDivElement>) {
+  const el = e.currentTarget
+  const r = el.getBoundingClientRect()
+  el.style.setProperty('--ry', `${((e.clientX - r.left) / r.width - 0.5) * 10}deg`)
+  el.style.setProperty('--rx', `${(0.5 - (e.clientY - r.top) / r.height) * 8}deg`)
+}
+
+function resetTilt(e: PointerEvent<HTMLDivElement>) {
+  e.currentTarget.style.setProperty('--rx', '0deg')
+  e.currentTarget.style.setProperty('--ry', '0deg')
+}
+
 function LivePanel() {
   const { voltage, frequency, load } = useLiveReadings()
 
   return (
+    <div className="live-stage" onPointerMove={tilt} onPointerLeave={resetTilt}>
+      <span className="float-chip float-chip--a" dir="ltr" lang="en">
+        <i className="dot dot--ok" /> 28 / 28 substations online
+      </span>
+      <span className="float-chip float-chip--b" dir="ltr" lang="en">
+        <i className="dot dot--cyan" /> 0 active alarms
+      </span>
     <aside className="live-panel" dir="ltr" lang="en" aria-label="Live grid readings (illustrative)">
       <header className="live-panel__head">
         <span className="live-chip">
@@ -129,12 +151,18 @@ function LivePanel() {
         بيانات توضيحية لعرض الواجهة
       </p>
     </aside>
+    </div>
   )
 }
 
 export function Hero() {
   return (
-    <header className="hero" id="home">
+    <header className="hero" id="home" data-glow onPointerMove={trackGlow}>
+      <div className="aurora" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
       <HeroScene />
       <div className="container hero__grid">
         <div className="hero__copy">

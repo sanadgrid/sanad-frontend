@@ -1,5 +1,6 @@
 import { Icon } from '../../../components/Icon'
 import { solutions } from '../content'
+import { trackGlow } from '../glow'
 
 export function Solutions() {
   return (
@@ -15,9 +16,9 @@ export function Solutions() {
             الأعمال.
           </p>
         </div>
-        <div className="pillars">
+        <div className="pillars" onPointerMove={trackGlow}>
           {solutions.map((s, i) => (
-            <article className="pillar reveal" key={s.title} style={{ transitionDelay: `${i * 70}ms` }}>
+            <article className="pillar reveal" data-glow key={s.title} style={{ transitionDelay: `${i * 70}ms` }}>
               <span className="pillar__index num">0{i + 1}</span>
               <span className="pillar__icon">
                 <Icon name={s.icon} size={24} />

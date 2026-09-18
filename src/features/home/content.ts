@@ -6,6 +6,7 @@ import type { IconName } from '../../components/Icon'
 export const navLinks = [
   { href: '#solutions', label: 'الحلول' },
   { href: '#monitoring', label: 'المراقبة' },
+  { href: '#network', label: 'الشبكة' },
   { href: '#tenders', label: 'طرح الأعمال' },
   { href: '#why', label: 'لماذا سند' },
 ]
@@ -14,6 +15,22 @@ export const heroStats = [
   { value: 230, suffix: ' kV+', label: 'شبكات نقل الطاقة' },
   { value: 1286, suffix: '', label: 'أصل قابل للمراقبة' },
   { value: 99.2, suffix: '%', label: 'جاهزية تشغيلية', decimals: 1 },
+]
+
+export const ticker = [
+  { label: 'FREQUENCY', value: '60.00 Hz' },
+  { label: 'SYSTEM LOAD', value: '4,812 MW' },
+  { label: 'BUS VOLTAGE', value: '230.4 kV' },
+  { label: 'SUBSTATIONS ONLINE', value: '28 / 28' },
+  { label: 'ASSETS MONITORED', value: '1,286' },
+  { label: 'AVAILABILITY', value: '99.2%' },
+  { label: 'ACTIVE ALARMS', value: '0' },
+]
+
+export const networkPoints: { icon: IconName; title: string; text: string }[] = [
+  { icon: 'activity', title: 'تدفق القدرة لحظياً', text: 'اتجاه وقيمة القدرة على كل خط نقل، محدّثة لحظة بلحظة.' },
+  { icon: 'map', title: 'تحديد موقع الأحداث', text: 'يظهر التنبيه على المحطة نفسها في الخريطة، لا في قائمة طويلة.' },
+  { icon: 'layers', title: 'سجل لكل أصل', text: 'من الخريطة إلى بيانات المعدّة وتاريخها التشغيلي بضغطة واحدة.' },
 ]
 
 export const solutions: { icon: IconName; title: string; text: string }[] = [
