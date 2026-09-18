@@ -25,6 +25,14 @@ const paths = {
   check: 'M20 6 9 17l-5-5',
   alert: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 8v5 M12 16.5v.01',
   lock: 'M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4',
+  chevronUp: 'm18 15-6-6-6 6',
+  chevronDown: 'm6 9 6 6 6-6',
+  plus: 'M12 5v14 M5 12h14',
+  minus: 'M5 12h14',
+  maximize: 'M8 3H5a2 2 0 0 0-2 2v3 M21 8V5a2 2 0 0 0-2-2h-3 M16 21h3a2 2 0 0 0 2-2v-3 M3 16v3a2 2 0 0 0 2 2h3',
+  minimize: 'M8 3v3a2 2 0 0 1-2 2H3 M21 8h-3a2 2 0 0 1-2-2V3 M3 16h3a2 2 0 0 1 2 2v3 M16 21v-3a2 2 0 0 1 2-2h3',
+  fit: 'M3 9V5a2 2 0 0 1 2-2h4 M15 3h4a2 2 0 0 1 2 2v4 M21 15v4a2 2 0 0 1-2 2h-4 M9 21H5a2 2 0 0 1-2-2v-4 M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
+  list: 'M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01',
 } as const
 
 export type IconName = keyof typeof paths

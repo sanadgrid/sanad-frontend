@@ -47,6 +47,12 @@ export const defaultFilters: Filters = {
 
 export const defaultLayers: Layers = { sensitive: true, vip: true, ties: true }
 
+/** How many filters narrow the stations — the number on the filters button. */
+export const countActive = (f: Filters) =>
+  [f.areaId, f.department, f.type, f.voltageKv, f.loadMva, f.customersK, f.search.trim(), f.failingN1, f.temporarySupply].filter(
+    Boolean,
+  ).length
+
 const roundUp = (value: number, step: number) => Math.max(step, Math.ceil(value / step) * step)
 
 /** Slider extents, fixed per network (forecast peak) so they do not jump with the period. */

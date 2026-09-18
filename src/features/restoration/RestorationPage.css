@@ -81,8 +81,9 @@
   --rc-marker-filter: drop-shadow(0 1px 2px rgba(10, 35, 64, 0.45));
   --rc-attribution: rgba(255, 255, 255, 0.82);
 
-  --rc-map-height: 660px;
-
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 100svh;
   background: var(--rc-page);
   color: var(--rc-text);
@@ -183,23 +184,57 @@
   color: var(--rc-bad-text);
 }
 
+/* The top bar, then the console: on a wide screen the two fill the window exactly. */
 .rc-main {
-  display: grid;
-  /* not the implicit auto column: the wide nowrap table would size the whole
-     page to its min-content and push every section past the viewport */
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  width: min(1760px, 100% - 40px);
-  margin-inline: auto;
-  padding-block: 20px 56px;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
 }
 
-.rc-panel {
-  border: 1px solid var(--rc-line);
-  border-radius: var(--radius);
-  background: var(--rc-surface);
-  backdrop-filter: var(--rc-glass);
-  box-shadow: var(--rc-shadow);
+/* read by screen readers only */
+.rc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Whatever floats over the map: a solid surface, lifted off it. */
+.rc-float {
+  position: relative;
+  z-index: 1;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 16px;
+  background: var(--rc-raised);
+  box-shadow: var(--rc-shadow-pop);
+  pointer-events: auto;
+}
+
+.rc-count {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding-inline: 6px;
+  border-radius: 99px;
+  background: var(--rc-accent-fill);
+  color: var(--rc-on-accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.rc-count--quiet {
+  display: inline-block;
+  height: auto;
+  padding: 3px 9px;
+  background: var(--rc-accent-soft);
+  color: var(--rc-accent-strong);
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .rc-ok {
@@ -225,7 +260,8 @@
   align-items: center;
   gap: 12px 20px;
   flex-wrap: wrap;
-  padding: 10px max(20px, (100% - 1760px) / 2);
+  /* slim and edge to edge, like the map under it */
+  padding: 8px 16px;
   border-bottom: 1px solid var(--rc-line);
   background: var(--rc-bar);
   backdrop-filter: blur(18px);
@@ -324,10 +360,6 @@
   background: var(--rc-accent-fill-hover);
 }
 
-.rc-btn--block {
-  width: 100%;
-}
-
 .rc-icon-btn {
   display: grid;
   place-items: center;
@@ -397,54 +429,149 @@
   background: var(--rc-raised);
 }
 
-/* ---------- page heading ---------- */
-.rc-head {
+/* ---------- console: the map, and the panels over it ---------- */
+/* One grid serves both layouts. Narrow: a column of sections on a scrolling page.
+   Wide (further down): the map fills the console and the same sections float on it. */
+.rc-console {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+}
+
+.rc-map {
+  position: relative;
+  grid-area: 2 / 1;
+  height: min(72dvh, 640px);
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 16px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* The part of the map that no panel covers. It takes no pointer itself: only
+   the controls in its corners do. */
+.rc-stage {
+  position: relative;
+  z-index: 1;
+  grid-area: 2 / 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 10px;
+  pointer-events: none;
+}
+
+.rc-stage__tools {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
   display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.rc-title {
-  margin: 0;
-  font-size: clamp(22px, 2.2vw, 30px);
-  line-height: 1.35;
-  color: var(--rc-heading);
-}
-
-.rc-head p {
-  margin: 4px 0 0;
-  color: var(--rc-muted);
-}
-
-.rc-filters-toggle {
+.rc-fab {
   display: none;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding-inline: 14px;
+  border-radius: 12px;
+  color: var(--rc-text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
 }
 
-.rc-section-title {
-  margin: 0;
-  font-size: 17px;
-  color: var(--rc-heading);
+.rc-fab:hover {
+  border-color: var(--rc-accent-line);
+  background: var(--rc-raised-hover);
+}
+
+.rc-fab svg {
+  color: var(--rc-accent-strong);
+}
+
+.rc-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rc-actions .rc-btn {
+  min-height: 42px;
+  background: var(--rc-raised);
+  white-space: normal;
+}
+
+.rc-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1140;
+  border: 0;
+  background: rgba(3, 13, 28, 0.5);
+  cursor: default;
 }
 
 /* ---------- KPI strip ---------- */
 .rc-kpis {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(300px, 1.6fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.rc-kpis__lead {
+  grid-area: 1 / 1;
+  min-width: 0;
+  padding-inline: 8px 4px;
+}
+
+.rc-kpis > .rc-icon-btn {
+  grid-area: 1 / 2;
+}
+
+.rc-title {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--rc-heading);
+}
+
+.rc-kpis__lead p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--rc-muted);
+}
+
+.rc-kpis__tiles {
+  display: flex;
+  grid-area: 2 / 1 / 3 / -1;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rc-scrollbar) transparent;
 }
 
 .rc-kpi {
   position: relative;
   display: grid;
-  align-content: start;
-  gap: 4px;
+  flex: 1 0 142px;
+  align-content: center;
   min-width: 0;
-  padding: 16px 18px;
-  border: 1px solid var(--rc-line);
-  border-radius: 16px;
-  background: var(--rc-surface);
-  box-shadow: var(--rc-shadow);
+  padding: 9px 12px 7px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 11px;
+  background: var(--rc-fill);
   overflow: hidden;
 }
 
@@ -469,81 +596,75 @@
 }
 
 .rc-kpi__label {
-  font-size: 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: nowrap;
   color: var(--rc-muted);
 }
 
 .rc-kpi strong {
-  font-size: clamp(24px, 2vw, 32px);
+  font-size: 23px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.25;
   letter-spacing: -0.02em;
   text-align: right;
   color: var(--rc-heading);
 }
 
 .rc-kpi strong small {
-  font-size: 0.45em;
+  font-size: 0.5em;
   font-weight: 600;
   letter-spacing: 0;
   color: var(--rc-muted);
 }
 
-.rc-kpi__note {
-  font-size: 11px;
-  color: var(--rc-faint);
-}
-
 .rc-kpi--donut {
-  grid-template-columns: auto 1fr;
+  flex: 0 0 auto;
+  grid-template-columns: auto auto;
   align-items: center;
-  align-content: center;
-  gap: 18px;
+  gap: 12px;
 }
 
 .rc-donut {
   display: grid;
   place-items: center;
-  width: 104px;
-  height: 104px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
 }
 
 .rc-donut div {
   display: grid;
   place-content: center;
-  width: 70px;
-  height: 70px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--rc-raised);
-  text-align: center;
-  line-height: 1.2;
 }
 
 .rc-donut strong {
-  font-size: 22px;
+  font-size: 12px;
+  letter-spacing: 0;
   text-align: center;
 }
 
-.rc-donut span {
-  font-size: 11px;
-  color: var(--rc-muted);
+.rc-donut__side {
+  display: grid;
+  gap: 1px;
 }
 
 .rc-donut__legend {
-  display: grid;
-  gap: 5px;
+  display: flex;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 12px;
-  color: var(--rc-text-2);
 }
 
 .rc-donut__legend li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 
 .rc-donut__legend i {
@@ -554,40 +675,97 @@
 }
 
 .rc-donut__legend b {
-  margin-inline-start: auto;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--rc-text-strong);
 }
 
-/* ---------- main grid: filters | map | detail ---------- */
-.rc-grid {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 400px;
-  gap: 16px;
+/* the strip folded away: two figures and the way back */
+.rc-kpis-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 14px;
+  height: 40px;
+  padding-inline: 14px 10px;
+  border-radius: 99px;
+  color: var(--rc-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.rc-filters-wrap {
-  display: grid;
-  min-width: 0;
+.rc-kpis-pill:hover {
+  border-color: var(--rc-accent-line);
 }
 
-/* The filter panel sets the height of the row and the map stretches to it. The
-   detail panel must not: size containment takes it out of the row's sizing, so
-   it fills the row and scrolls inside instead of growing the page. */
-.rc-detail {
-  contain: size;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--rc-scrollbar) transparent;
+.rc-kpis-pill__figure {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--rc-text-2);
 }
 
-.rc-filters {
+.rc-kpis-pill__figure i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rc-tone, var(--rc-accent));
+}
+
+.rc-kpis-pill__figure b {
+  font-size: 15px;
+  color: var(--rc-heading);
+}
+
+/* ---------- drawers: filters and station detail ---------- */
+/* Narrow: sheets that rise over the page. Wide: columns beside the clear area. */
+.rc-drawer {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 1150;
+  display: flex;
+  flex-direction: column;
+  max-height: 80dvh;
+  border-width: 1px 0 0;
+  border-radius: 18px 18px 0 0;
+  overflow: hidden;
+}
+
+.rc-drawer__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rc-line-soft);
+  color: var(--rc-accent-strong);
+}
+
+.rc-drawer__title {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--rc-heading);
+}
+
+.rc-drawer__reset {
+  margin-inline-start: auto;
+}
+
+.rc-drawer__body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 15px;
-  padding: 18px;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rc-scrollbar) transparent;
 }
 
+/* ---------- filter controls ---------- */
 .rc-field {
   display: grid;
   gap: 8px;
@@ -852,14 +1030,6 @@
 }
 
 /* ---------- map ---------- */
-.rc-map {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  min-height: var(--rc-map-height);
-  overflow: hidden;
-  isolation: isolate;
-}
-
 .rc-map__canvas {
   width: 100%;
   height: 100%;
@@ -876,33 +1046,95 @@
   filter: var(--rc-marker-filter);
 }
 
+/* A station that cannot be restored asks for the eye: a ring breathes out of it.
+   Leaflet writes the stroke as attributes, which a stylesheet overrides. */
+.rc-map__halo {
+  /* it spreads quickly and fades evenly, so the ring is seen for most of the cycle */
+  animation:
+    rc-halo-spread 2.4s ease-out infinite,
+    rc-halo-fade 2.4s linear infinite;
+}
+
+@keyframes rc-halo-spread {
+  from {
+    stroke-width: 0;
+  }
+
+  to {
+    stroke-width: 28px;
+  }
+}
+
+@keyframes rc-halo-fade {
+  from {
+    stroke-opacity: 0.5;
+  }
+
+  to {
+    stroke-opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-map__halo {
+    animation: none;
+    stroke-width: 10px;
+    stroke-opacity: 0.22;
+  }
+}
+
+/* Station names, from the zoom where they stop piling up (the map sets the class). */
+.rc-map .rc-map__label {
+  display: none;
+}
+
+.rc-map .rc-map--labelled .rc-map__label {
+  display: block;
+}
+
+.rc-map__label span {
+  position: absolute;
+  top: 0;
+  left: var(--rc-label-gap, 16px);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0 6px;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--rc-raised) 90%, transparent);
+  color: var(--rc-text);
+  font: 600 10.5px/1.6 var(--font-en);
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.rc-map__label span.is-left {
+  right: var(--rc-label-gap, 16px);
+  left: auto;
+}
+
+.rc-map__label i {
+  font-style: normal;
+  font-weight: 700;
+}
+
 .rc-map .leaflet-container {
   background: var(--rc-map-bg);
   font-family: var(--font-en);
 }
 
-.rc-map .leaflet-bar {
-  border: 1px solid var(--rc-line-strong);
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: var(--rc-shadow-pop);
+/* The tile credit is a licence condition, so it is always readable: the map
+   keeps it in the corner of the area that no panel covers. */
+.rc-map .leaflet-bottom.leaflet-right {
+  right: var(--rc-credit-right, 0);
+  bottom: var(--rc-credit-bottom, 0);
 }
 
-.rc-map .leaflet-bar a {
-  border-color: var(--rc-line-soft);
-  background: var(--rc-raised);
-  color: var(--rc-text);
-}
-
-.rc-map .leaflet-bar a:hover {
-  background: var(--rc-raised-hover);
-}
-
-/* The tile credit is a licence condition, so it is always there — just quiet. */
 .rc-map .leaflet-control-attribution {
-  padding: 1px 7px;
-  /* the map is laid out LTR: this is the corner that faces the map */
-  border-top-left-radius: 8px;
+  margin: 0;
+  padding: 1px 8px;
+  border-radius: 8px;
   background: var(--rc-attribution);
   color: var(--rc-muted);
   font-size: 10px;
@@ -924,7 +1156,7 @@
 }
 
 .leaflet-tooltip.rc-tooltip {
-  padding: 8px 12px;
+  padding: 7px 11px;
   border: 1px solid var(--rc-line-strong);
   border-radius: 10px;
   background: var(--rc-raised);
@@ -935,6 +1167,28 @@
 
 .leaflet-tooltip.rc-tooltip:before {
   display: none;
+}
+
+.rc-tip b {
+  color: var(--rc-text-strong);
+}
+
+.rc-tip__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.rc-tip__status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rc-status);
+}
+
+.rc-tip__facts {
+  color: var(--rc-text-2);
 }
 
 /* Imported layers are painted on a canvas under the network. The network's SVG
@@ -976,25 +1230,106 @@
   color: var(--rc-muted);
 }
 
-/* a strip under the map rather than a box over it: it never hides a station */
+/* one stack for everything that moves the map */
+.rc-controls {
+  display: grid;
+  width: 40px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.rc-controls button {
+  display: grid;
+  place-items: center;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--rc-line-soft);
+  background: none;
+  color: var(--rc-text);
+  cursor: pointer;
+}
+
+.rc-controls button:last-child {
+  border-bottom: 0;
+}
+
+.rc-controls button:hover {
+  background: var(--rc-raised-hover);
+}
+
+.rc-controls button[aria-pressed='true'] {
+  color: var(--rc-accent-strong);
+}
+
+.rc-controls button:focus-visible {
+  outline-offset: -3px;
+}
+
+/* The legend sits in the corner of the clear area: never over a panel, the
+   controls or the tile credit, which keep the other corners. */
+.rc-legend,
+.rc-legend-toggle {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+}
+
+.rc-legend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  color: var(--rc-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rc-legend-toggle:hover {
+  border-color: var(--rc-accent-line);
+}
+
 .rc-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 22px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--rc-line);
-  background: var(--rc-inset);
+  display: grid;
+  gap: 7px;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 8px 12px 10px;
+  border-radius: 14px;
   font-size: 11.5px;
   color: var(--rc-text-2);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rc-scrollbar) transparent;
+}
+
+.rc-legend header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rc-legend h2 {
+  margin: 0;
+  font-size: 12px;
+  color: var(--rc-heading);
 }
 
 .rc-legend ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
+  display: grid;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.rc-legend ul + ul {
+  padding-top: 7px;
+  border-top: 1px solid var(--rc-line-soft);
 }
 
 .rc-legend li {
@@ -1043,37 +1378,155 @@
   border-style: dashed;
 }
 
-/* ---------- station detail ---------- */
-.rc-detail {
-  display: grid;
-  align-content: start;
-  gap: 14px;
+.rc-legend__dot--size {
+  border: 2px solid var(--rc-muted);
+}
+
+/* ---------- bottom sheet: priorities and methodology ---------- */
+.rc-sheet {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* the header drops what does not fit by the width of the sheet, not of the screen */
+.rc-sheet.is-open {
+  container: rc-sheet / inline-size;
+}
+
+.rc-sheet__head {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.rc-sheet.is-open .rc-sheet__head {
+  padding-inline-end: 10px;
+  border-bottom: 1px solid var(--rc-line-soft);
+}
+
+.rc-sheet__handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding-inline: 16px 12px;
+  border: 0;
+  background: none;
+  color: var(--rc-accent-strong);
+  cursor: pointer;
+}
+
+.rc-sheet__handle:hover {
+  background: var(--rc-raised-hover);
+}
+
+.rc-sheet__handle:focus-visible {
+  outline-offset: -3px;
+}
+
+.rc-sheet__title {
+  font-size: 14px;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--rc-heading);
+}
+
+.rc-sheet__handle .rc-count {
+  font-size: 12px;
+}
+
+.rc-sheet__tabs {
+  flex: none;
+  margin-block: 5px;
+}
+
+.rc-sheet__tabs button {
+  padding-inline: 12px;
+}
+
+.rc-sheet__note {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  color: var(--rc-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-sheet__export {
+  margin-inline-start: auto;
+  padding-block: 6px;
+}
+
+@container rc-sheet (max-width: 1080px) {
+  .rc-sheet__note {
+    display: none;
+  }
+}
+
+/* between two open drawers, or on a phone: the tabs and the export take a second line */
+@container rc-sheet (max-width: 640px) {
+  .rc-sheet__head {
+    padding-bottom: 6px;
+  }
+
+  .rc-sheet__handle {
+    flex: 1;
+  }
+
+  .rc-sheet__handle svg:last-child {
+    margin-inline-start: auto;
+  }
+
+  .rc-sheet__tabs {
+    margin-inline-start: 12px;
+  }
+
+  .rc-sheet__tabs button {
+    padding-inline: 8px;
+  }
+
+  .rc-sheet__export {
+    padding-inline: 10px;
+  }
+}
+
+.rc-sheet__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rc-scrollbar) transparent;
+}
+
+.rc-sheet__empty {
   padding: 18px;
 }
 
-.rc-detail--empty {
-  place-content: center;
-  justify-items: center;
-  min-height: 220px;
-  text-align: center;
-  color: var(--rc-muted);
-}
-
-.rc-detail--empty p {
-  max-width: 260px;
-  margin: 0;
+/* ---------- station detail ---------- */
+.rc-detail .rc-drawer__body {
+  gap: 14px;
 }
 
 .rc-detail__head {
-  display: flex;
   justify-content: space-between;
   align-items: start;
   gap: 12px;
+  padding-block: 12px 10px;
 }
 
 .rc-detail__code {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
+  line-height: 1.3;
   letter-spacing: -0.01em;
   text-align: right;
   color: var(--rc-heading);
@@ -1303,6 +1756,19 @@
   background: var(--rc-accent-soft);
 }
 
+.rc-table--rows tbody tr {
+  cursor: pointer;
+}
+
+/* the sheet scrolls under the header, so it needs a surface of its own */
+.rc-table--rows thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: linear-gradient(var(--rc-inset), var(--rc-inset)), var(--rc-raised);
+  box-shadow: inset 0 -1px 0 var(--rc-line);
+}
+
 .rc-table--compact {
   font-size: 12px;
 }
@@ -1371,40 +1837,14 @@
   min-width: 38px;
 }
 
-.rc-priority {
-  padding: 18px 18px 8px;
-}
-
-.rc-priority__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-
-.rc-priority__head p {
-  margin: 2px 0 0;
-  font-size: 12.5px;
-  color: var(--rc-muted);
-}
-
 /* ---------- methodology ---------- */
 .rc-method {
-  padding: 14px 18px;
-}
-
-.rc-method summary {
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.rc-method ul {
   display: grid;
   gap: 8px;
   max-width: 980px;
-  margin: 12px 0 4px;
-  padding-inline-start: 20px;
+  margin: 0;
+  padding: 16px 18px 18px;
+  padding-inline-start: 38px;
   font-size: 13.5px;
   line-height: 1.9;
   color: var(--rc-text-2);
@@ -1894,7 +2334,8 @@
 /* ---------- toast ---------- */
 .rc-toast {
   position: fixed;
-  inset: auto 50% 24px auto;
+  /* clear of the handle at the foot of the map */
+  inset: auto 50% 72px auto;
   z-index: 1200;
   max-width: min(560px, 100% - 32px);
   padding: 12px 18px;
@@ -1915,45 +2356,125 @@
   color: var(--rc-bad-text);
 }
 
-/* ---------- responsive ---------- */
-@media (max-width: 1480px) {
-  .rc-kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+/* ---------- wide screens: the map is the page ---------- */
+/* The console fills the window under the top bar and nothing scrolls but the
+   panels. They sit in a grid laid over the map, so no two of them can overlap:
+   filters | clear area | detail, under the KPI strip, with the sheet at the foot
+   of the clear area. (The same width is in useMediaQuery.ts.) */
+@media (min-width: 1100px) {
+  .rc {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
   }
 
-  .rc-kpi--donut {
-    justify-content: start;
+  .rc-console {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 12px 0;
+    height: 100%;
+  }
+
+  /* out of the grid (a placed item would be held inside its cell), so it lies
+     under every panel, from edge to edge */
+  .rc-map {
+    position: absolute;
+    inset: 0;
+    grid-area: auto;
+    height: auto;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .rc-kpis,
+  .rc-kpis-pill {
+    grid-area: 1 / 1 / 2 / -1;
+  }
+
+  .rc-kpis {
+    display: flex;
+    align-items: stretch;
+  }
+
+  .rc-kpis__lead {
+    flex: none;
+    align-self: center;
+    max-width: 220px;
+  }
+
+  .rc-kpis__tiles {
+    flex: 1;
+  }
+
+  .rc-kpis > .rc-icon-btn {
+    align-self: center;
+  }
+
+  .rc-stage {
+    grid-area: 2 / 2 / 3 / 3;
+    margin: 0;
+  }
+
+  .rc-fab {
+    display: inline-flex;
+  }
+
+  .rc-actions,
+  .rc-scrim {
+    display: none;
+  }
+
+  .rc-drawer {
+    position: relative;
+    inset: auto;
+    z-index: 1;
+    max-height: 100%;
+    border-width: 1px;
+    border-radius: 16px;
+  }
+
+  .rc-filters {
+    grid-area: 2 / 1 / -1 / 2;
+    width: 320px;
+    margin-inline-end: 12px;
+  }
+
+  /* as tall as what it says, and no taller than the map allows */
+  .rc-detail {
+    grid-area: 2 / 3 / -1 / 4;
+    align-self: start;
+    width: 380px;
+    margin-inline-start: 12px;
+  }
+
+  .rc-sheet {
+    grid-area: 3 / 2 / 4 / 3;
+    justify-self: center;
+  }
+
+  .rc-sheet.is-open {
+    justify-self: stretch;
+    /* 45% of the map, which is the window less the top bar */
+    height: calc((100dvh - 57px) * 0.45);
   }
 }
 
-@media (max-width: 1280px) {
-  .rc {
-    --rc-map-height: 580px;
+/* ---------- narrow screens ---------- */
+@media (max-width: 1099.98px) {
+  .rc-sheet:not(.is-open) .rc-sheet__handle {
+    flex: 1;
   }
 
-  .rc-grid {
-    grid-template-columns: 280px minmax(0, 1fr);
+  .rc-sheet:not(.is-open) .rc-sheet__handle svg:last-child {
+    margin-inline-start: auto;
   }
 
-  .rc-detail {
-    grid-column: 1 / -1;
-    contain: none;
-  }
-
-  .rc-detail--empty {
-    min-height: 140px;
+  .rc-legend {
+    max-width: min(100%, 250px);
   }
 }
 
 @media (max-width: 860px) {
-  .rc {
-    --rc-map-height: 460px;
-  }
-
-  .rc-main {
-    width: min(1760px, 100% - 24px);
-  }
-
   .rc-topbar {
     padding-inline: 12px;
   }
@@ -1964,41 +2485,11 @@
     padding: 0;
     border: 0;
   }
-
-  .rc-head {
-    align-items: start;
-    flex-direction: column;
-  }
-
-  .rc-filters-toggle {
-    display: inline-flex;
-  }
-
-  .rc-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .rc-filters-wrap:not(.is-open) {
-    display: none;
-  }
-
-  .rc-kpis {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .rc-kpi--donut {
-    grid-column: 1 / -1;
-  }
-
-  .rc-priority__head {
-    align-items: start;
-    flex-direction: column;
-  }
 }
 
 @media (max-width: 480px) {
-  .rc-kpis {
-    grid-template-columns: minmax(0, 1fr);
+  .rc-console {
+    padding: 10px;
   }
 
   .rc-dialog__head,

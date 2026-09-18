@@ -1,41 +1,16 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useRef } from 'react'
-import type { Status } from '../engine'
+import { useEffect, useRef, type RefObject } from 'react'
 import type { Layers } from '../filters'
-import type { Bbox } from '../import/types'
-import { CONSTRUCTION_LABEL, fmt, STATUS, SWITCHING_LABEL } from '../labels'
 import { layerColor } from '../layerPalette'
 import { themeColors, type MapColors } from '../mapTheme'
 import { mapTiles } from '../mapTiles'
-import type { Construction, LatLng, Switching } from '../types'
+import type { LatLng } from '../types'
 import type { VisibleLayer } from '../useMapLayers'
 import type { Theme } from '../useTheme'
 import { describeOnMap, drawImportedLayer, IMPORTED_PANE, IMPORTED_PANE_Z, paintImportedLayer } from './importedLayer'
-
-export interface MapStation {
-  id: string
-  code: string
-  district: string
-  location: LatLng
-  status: Status
-  capacityPct: number
-  loadMva: number
-  sensitive: boolean
-  vip: boolean
-}
-
-export interface MapTie {
-  id: string
-  from: MapStation
-  to: MapStation
-  fromFeederCode: string
-  toFeederCode: string
-  construction: Construction
-  circuits: 1 | 2
-  capacityMva: number
-  switching: Switching
-}
+import { fitBbox, fitPoints, followClearArea, panTo, patientFit, type MapView } from './mapView'
+import { drawNetwork, LABEL_PANE, LABEL_PANE_Z, type MapStation, type MapTie, type Themed } from './networkLayers'
 
 interface NetworkMapProps {
   center: LatLng
@@ -45,8 +20,10 @@ interface NetworkMapProps {
   layers: Layers
   /** Imported layers that are ticked and loaded, drawn under the network. */
   imported: VisibleLayer[]
-  /** Set to move the view to an area; a new object moves it again. */
-  focus: { bbox: Bbox } | null
+  /** Set to move the map; a new object moves it again. */
+  view: MapView | null
+  /** The part of the map that no panel covers: views are aimed at it. */
+  clearArea: RefObject<HTMLElement | null>
   selectedId: string | null
   theme: Theme
   onSelect: (stationId: string) => void
@@ -59,44 +36,8 @@ interface DrawnLayer {
   color: string
 }
 
-const OVERHEAD_DASH = '7 7'
-// parallel ties between the same two stations are fanned out by this many degrees
-const FAN_STEP = 0.0024
-
-const isWeak = (s: MapStation) => s.status === 'limited' || s.status === 'none'
-/** Bigger load → bigger marker, on a square-root scale so 120 MVA does not dwarf 15 MVA. */
-const radiusOf = (loadMva: number) => 6 + Math.sqrt(Math.max(0, loadMva)) * 0.9
-
-// tooltips are HTML strings, and the texts come from the database
-const escapeHtml = (text: string) =>
-  text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
-
-// Latin runs are isolated so "33 kV" or "NG-101" keep their order inside RTL text
-const ltr = (text: string) => `<bdi dir="ltr" class="num">${escapeHtml(text)}</bdi>`
-
-function stationTooltip(s: MapStation): string {
-  return `<div dir="rtl"><b>${ltr(s.code)}</b> · ${escapeHtml(s.district)}<br>قدرة الاستعادة ${ltr(`${s.capacityPct}%`)} · ${ltr(`${fmt(s.loadMva, 1)} MVA`)}</div>`
-}
-
-function tieTooltip(t: MapTie): string {
-  const ends = `${ltr(`${t.from.code}/${t.fromFeederCode}`)} ↔ ${ltr(`${t.to.code}/${t.toFeederCode}`)}`
-  const kind = `${CONSTRUCTION_LABEL[t.construction]}${t.circuits === 2 ? ' · دائرتان' : ''} · ${SWITCHING_LABEL[t.switching]}`
-  return `<div dir="rtl">${ends}<br>${kind} · ${ltr(`${fmt(t.capacityMva)} MVA`)}</div>`
-}
-
-/** Shift the i-th of n parallel ties sideways, perpendicular to the line. */
-function fan(from: LatLng, to: LatLng, i: number, n: number): [number, number][] {
-  const dLat = to.lat - from.lat
-  const dLng = to.lng - from.lng
-  const length = Math.hypot(dLat, dLng) || 1
-  const offset = (i - (n - 1) / 2) * FAN_STEP
-  const oLat = (-dLng / length) * offset
-  const oLng = (dLat / length) * offset
-  return [
-    [from.lat + oLat, from.lng + oLng],
-    [to.lat + oLat, to.lng + oLng],
-  ]
-}
+// from the zoom a fitted sector opens at: further out, the names pile up on each other
+const LABEL_ZOOM = 11
 
 export function NetworkMap({
   center,
@@ -105,7 +46,8 @@ export function NetworkMap({
   ties,
   layers,
   imported,
-  focus,
+  view,
+  clearArea,
   selectedId,
   theme,
   onSelect,
@@ -116,11 +58,17 @@ export function NetworkMap({
   // thousands of imported shapes are painted on one canvas instead of one SVG node each
   const canvas = useRef<L.Renderer | null>(null)
   const drawn = useRef(new Map<string, DrawnLayer>())
-  // the latest callback without redrawing every marker when its identity changes
+  // the latest values, for handlers and for views asked long after the markers were drawn
   const select = useRef(onSelect)
+  const shown = useRef(stations)
   useEffect(() => {
     select.current = onSelect
-  }, [onSelect])
+    shown.current = stations
+  }, [onSelect, stations])
+
+  // Until the user moves the map himself, it keeps the stations framed in whatever
+  // room the panels leave: opening the filters slides the network aside, not under them.
+  const framed = useRef(true)
 
   // Every colour goes through a painter, so a change of theme restyles the
   // layers that exist: no redraw, and the map keeps its view and its tiles.
@@ -132,28 +80,52 @@ export function NetworkMap({
   }, [theme])
 
   useEffect(() => {
-    if (!container.current) return
-    const instance = L.map(container.current, { zoomControl: false, minZoom: 8, maxZoom: 16 })
+    const element = container.current
+    if (!element) return
+    // the page has its own zoom buttons, grouped with the other map controls; half
+    // steps let a fitted view use the room it has instead of dropping a whole level
+    const instance = L.map(element, { zoomControl: false, minZoom: 8, maxZoom: 16, zoomSnap: 0.5 })
     L.tileLayer(mapTiles.url, {
       attribution: mapTiles.attribution,
       subdomains: 'abcd',
       maxNativeZoom: mapTiles.maxNativeZoom,
       className: mapTiles.themed ? 'rc-map__tiles--themed' : undefined,
     }).addTo(instance)
-    L.control.zoom({ position: 'topleft', zoomInTitle: 'تكبير', zoomOutTitle: 'تصغير' }).addTo(instance)
     // the credit of the tiles stays; the library's own prefix is not needed
     instance.attributionControl.setPrefix(false)
     instance.createPane(IMPORTED_PANE).style.zIndex = String(IMPORTED_PANE_Z)
+    const labels = instance.createPane(LABEL_PANE)
+    labels.style.zIndex = String(LABEL_PANE_Z)
+    labels.style.pointerEvents = 'none'
     canvas.current = L.canvas({ pane: IMPORTED_PANE, padding: 0.5, tolerance: 4 })
     map.current = instance
     overlay.current = L.layerGroup().addTo(instance)
     const importedLayers = drawn.current
 
-    // the grid can resize the container after Leaflet has measured it
-    const observer = new ResizeObserver(() => instance.invalidateSize())
-    observer.observe(container.current)
+    const release = () => {
+      framed.current = false
+    }
+    const zoomGestures = ['wheel', 'dblclick', 'keydown']
+    instance.on('dragstart', release)
+    for (const type of zoomGestures) element.addEventListener(type, release, { passive: true })
+
+    const showLabels = () => element.classList.toggle('rc-map--labelled', instance.getZoom() >= LABEL_ZOOM)
+    instance.on('zoomend', showLabels)
+
+    // a panel opening, the full screen or a turned phone resize the box after
+    // Leaflet has measured it: without this a band of the map stays without tiles
+    const observer = new ResizeObserver(() => instance.invalidateSize({ pan: false }))
+    observer.observe(element)
+    const clear = clearArea.current
+    const reframe = patientFit(instance, () => {
+      if (framed.current) fitPoints(instance, shown.current.map((s) => s.location), clear)
+    })
+    // after the observer above: Leaflet must know its new size before it fits anything into it
+    const unfollow = clear ? followClearArea(instance, clear, reframe) : undefined
 
     return () => {
+      for (const type of zoomGestures) element.removeEventListener(type, release)
+      unfollow?.()
       observer.disconnect()
       instance.remove()
       map.current = null
@@ -161,11 +133,21 @@ export function NetworkMap({
       canvas.current = null
       importedLayers.clear()
     }
-  }, [])
+  }, [clearArea])
 
+  // The first view is the stations themselves — never an imported layer, which may
+  // cover a whole region. The sector's centre only serves a network without stations.
   useEffect(() => {
-    map.current?.setView([center.lat, center.lng], zoom)
-  }, [center.lat, center.lng, zoom])
+    const instance = map.current
+    if (!instance) return
+    instance.setView([center.lat, center.lng], zoom, { animate: false })
+    fitPoints(
+      instance,
+      shown.current.map((s) => s.location),
+      clearArea.current,
+      false,
+    )
+  }, [center.lat, center.lng, zoom, clearArea])
 
   useEffect(() => {
     const group = overlay.current
@@ -173,68 +155,13 @@ export function NetworkMap({
     group.clearLayers()
     painters.current = []
 
-    const themed = <T extends L.Path>(layer: T, style: (c: MapColors) => L.PathOptions): T => {
+    const themed: Themed = (layer, style) => {
       const paint = (c: MapColors) => layer.setStyle(style(c))
       paint(colors.current)
       painters.current.push(paint)
       return layer.addTo(group)
     }
-
-    if (layers.ties) {
-      const parallel = new Map<string, MapTie[]>()
-      for (const tie of ties) {
-        const key = [tie.from.id, tie.to.id].sort().join('|')
-        parallel.set(key, [...(parallel.get(key) ?? []), tie])
-      }
-      for (const bundle of parallel.values()) {
-        bundle.forEach((tie, i) => {
-          // keep one orientation per bundle so the fan does not fold onto itself
-          const [a, b] = tie.from.id < tie.to.id ? [tie.from, tie.to] : [tie.to, tie.from]
-          const path = fan(a.location, b.location, i, bundle.length)
-          const weak = isWeak(tie.from) || isWeak(tie.to)
-          const overhead = tie.construction === 'overhead'
-          const dashArray = overhead ? OVERHEAD_DASH : undefined
-          const line = themed(
-            L.polyline(path, { dashArray, weight: tie.circuits === 2 ? 5.5 : 1.8, lineCap: 'butt' }),
-            (c) => ({ color: weak ? c.tieWeak : overhead ? c.tieOverhead : c.tieUnderground, opacity: c.tieOpacity }),
-          )
-          // double circuit = two parallel strokes: a core in the basemap's tone splits the wide line
-          if (tie.circuits === 2)
-            themed(L.polyline(path, { dashArray, weight: 1.8, lineCap: 'butt', interactive: false }), (c) => ({
-              color: c.tieCore,
-            }))
-          line.bindTooltip(tieTooltip(tie), { sticky: true, className: 'rc-tooltip' })
-        })
-      }
-    }
-
-    for (const s of stations) {
-      const at: [number, number] = [s.location.lat, s.location.lng]
-      const radius = radiusOf(s.loadMva)
-      const ring = (extra: number, color: (c: MapColors) => string, dashArray?: string) =>
-        themed(
-          L.circleMarker(at, { radius: radius + extra, weight: 2, dashArray, fill: false, interactive: false }),
-          (c) => ({ color: color(c) }),
-        )
-
-      if (layers.sensitive && s.sensitive) ring(4, (c) => c.sensitive)
-      if (layers.vip && s.vip) ring(layers.sensitive && s.sensitive ? 8 : 4, (c) => c.vip, '3 4')
-      if (s.id === selectedId) ring(12, (c) => c.selection)
-
-      themed(
-        L.circleMarker(at, {
-          radius,
-          fillColor: STATUS[s.status].color,
-          fillOpacity: 0.95,
-          bubblingMouseEvents: false,
-          // the stylesheet hangs the light theme's drop shadow on this
-          className: 'rc-map__station',
-        }),
-        (c) => ({ color: c.markerStroke, weight: c.markerStrokeWeight }),
-      )
-        .bindTooltip(stationTooltip(s), { direction: 'top', offset: [0, -radius], className: 'rc-tooltip' })
-        .on('click', () => select.current(s.id))
-    }
+    drawNetwork({ group, themed, stations, ties, layers, selectedId, onSelect: (id) => select.current(id) })
   }, [stations, ties, layers, selectedId])
 
   // Imported layers are kept apart from the network overlay: a filter or a
@@ -263,16 +190,25 @@ export function NetworkMap({
   }, [imported, theme])
 
   useEffect(() => {
-    if (!focus) return
-    const [west, south, east, north] = focus.bbox
-    map.current?.fitBounds(
-      [
-        [south, west],
-        [north, east],
-      ],
-      { padding: [28, 28], maxZoom: 15 },
-    )
-  }, [focus])
+    const instance = map.current
+    if (!instance || !view) return
+    if (view.kind === 'fit') {
+      framed.current = true
+      fitPoints(
+        instance,
+        shown.current.map((s) => s.location),
+        clearArea.current,
+      )
+      return
+    }
+    // a framed map moves itself when the panel of the clicked station opens
+    if (view.kind === 'station' && view.whenCovered && framed.current) return
+    const station = view.kind === 'station' && shown.current.find((s) => s.id === view.id)
+    if (view.kind === 'zoom') instance.setZoom(instance.getZoom() + view.by)
+    else if (view.kind === 'bbox') fitBbox(instance, view.bbox, clearArea.current)
+    else if (!station || !panTo(instance, station.location, clearArea.current, view.whenCovered)) return
+    framed.current = false
+  }, [view, clearArea])
 
   return <div className="rc-map__canvas" ref={container} dir="ltr" role="application" aria-label="خريطة محطات القطاع" />
 }

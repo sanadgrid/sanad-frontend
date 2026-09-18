@@ -11,6 +11,12 @@ export interface ImportedStyle {
   rim: string
 }
 
+// Context, not content: a layer can hold thousands of shapes, and they must stay
+// behind the few stations the page is about — small, thin and partly transparent.
+const POINT: L.CircleMarkerOptions = { radius: 2.5, weight: 0.6, opacity: 0.5, fillOpacity: 0.55 }
+const AREA: L.PolylineOptions = { weight: 1, opacity: 0.6, fillOpacity: 0.06 }
+const LINE: L.PolylineOptions = { weight: 1.2, opacity: 0.55 }
+
 // what a drawn shape says when it is hovered or clicked
 const info = new WeakMap<L.Layer, CompactFeature>()
 
@@ -34,16 +40,15 @@ export function drawImportedLayer(features: CompactFeature[], renderer: L.Render
   for (let i = 0; i < features.length; i += 1) {
     const feature = features[i]
     let shape: L.Path
-    if (feature.t === 'p') shape = L.circleMarker(flip(feature.c), { ...shared, radius: 4, weight: 1, fillOpacity: 0.9 })
-    else if (feature.t === 'g')
-      shape = L.polygon(feature.c.map((ring) => ring.map(flip)), { ...shared, weight: 1.6, fillOpacity: 0.12 })
+    if (feature.t === 'p') shape = L.circleMarker(flip(feature.c), { ...shared, ...POINT })
+    else if (feature.t === 'g') shape = L.polygon(feature.c.map((ring) => ring.map(flip)), { ...shared, ...AREA })
     else {
       const lines = [feature.c.map(flip)]
       for (let next = features[i + 1]; next?.t === 'l' && sameLabel(feature, next); next = features[i + 1]) {
         lines.push(next.c.map(flip))
         i += 1
       }
-      shape = L.polyline(lines, { ...shared, weight: 2.2, opacity: 0.9 })
+      shape = L.polyline(lines, { ...shared, ...LINE })
     }
     info.set(shape, feature)
     group.addLayer(shape)
