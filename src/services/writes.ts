@@ -1,5 +1,5 @@
 import { writeBatch, type DocumentData, type DocumentReference } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { db } from '../lib/firestore'
 
 // A commit takes at most 500 writes and 10 MiB; stay clear of both.
 const BATCH_OPS = 400

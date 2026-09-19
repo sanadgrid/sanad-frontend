@@ -10,15 +10,17 @@ interface TopBarProps {
   source: NetworkSource | null
   sectors: SectorSummary[]
   sectorId: string
+  /** `null` only in the test build that has nobody to sign in. */
   user: AuthUser | null
-  /** A sign-in or an upload is in flight. */
+  /** A sign-out or an upload is in flight. */
   busy: boolean
-  /** Admins may import map layers. */
-  isAdmin: boolean
+  /** Admins may import map layers, once there is a sector to import them into. */
+  canImport: boolean
+  /** Admins may publish the demo network. */
+  canPublish: boolean
   theme: Theme
   onToggleTheme: () => void
   onSectorChange: (sectorId: string) => void
-  onSignIn: () => void
   onSignOut: () => void
   onSeed: () => void
   onImport: () => void
@@ -30,11 +32,11 @@ export function TopBar({
   sectorId,
   user,
   busy,
-  isAdmin,
+  canImport,
+  canPublish,
   theme,
   onToggleTheme,
   onSectorChange,
-  onSignIn,
   onSignOut,
   onSeed,
   onImport,
@@ -77,27 +79,23 @@ export function TopBar({
           <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} />
         </button>
 
-        {isAdmin && (
+        {canImport && (
           <button className="rc-btn" type="button" disabled={busy} onClick={onImport}>
             <Icon name="layers" size={15} />
             استيراد طبقات الخريطة
           </button>
         )}
 
-        {user && (
+        {canPublish && (
           <button className="rc-btn" type="button" disabled={busy} onClick={onSeed}>
             <Icon name="upload" size={15} />
             نشر البيانات التجريبية
           </button>
         )}
 
-        {user ? (
+        {user && (
           <button className="rc-btn" type="button" disabled={busy} onClick={onSignOut} title={user.email ?? undefined}>
             تسجيل الخروج
-          </button>
-        ) : (
-          <button className="rc-btn rc-btn--accent" type="button" disabled={busy} onClick={onSignIn}>
-            تسجيل الدخول
           </button>
         )}
       </div>

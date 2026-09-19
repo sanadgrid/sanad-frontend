@@ -1,7 +1,8 @@
 import { collection, doc, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import type { BackupCase } from '../features/restoration/backup/model'
 import type { Visibility } from '../features/restoration/types'
-import { db, isFirebaseConfigured } from '../lib/firebase'
+import { isFirebaseConfigured } from '../lib/firebase'
+import { db } from '../lib/firestore'
 import { currentUid } from './auth'
 import { applyPlanChanges, emptyPlan, fitsOneDocument, planOf, type BackupPlan, type PlanChange } from './backupPlanDoc'
 import { cache, plansKey } from './cache'
@@ -32,9 +33,8 @@ async function readPlan(sectorId: string): Promise<BackupPlan> {
 }
 
 /**
- * Never throws. `null` for a visitor or a build without a database: the feature
- * is not theirs, and costs them no read. One read for a member, none for the
- * ten minutes that follow.
+ * Never throws. `null` for a build without a database, or a session that just
+ * ended. One read for a member, none for the ten minutes that follow.
  */
 export async function loadBackupPlan(sectorId: string): Promise<LoadedPlan | null> {
   if (!isFirebaseConfigured) return null

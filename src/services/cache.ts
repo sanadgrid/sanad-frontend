@@ -10,7 +10,7 @@ export const CACHE_PREFIX = 'sanad.rc.'
 export interface CacheEntry<T> {
   /** When the value was last confirmed to match the database, ms since the epoch. */
   savedAt: number
-  /** Who read it; `null` for a visitor. An entry is never served to anyone else. */
+  /** Who read it. An entry is never served to anyone else. */
   uid: string | null
   value: T
 }
@@ -111,22 +111,33 @@ function browserStore(): KeyValueStore | null {
 
 export const cache = createCache(browserStore())
 
-export type CacheScope = 'public' | 'member'
-export const scopeOf = (uid: string | null): CacheScope => (uid ? 'member' : 'public')
-
-export const networkKey = (sectorId: string, scope: CacheScope) => `${CACHE_PREFIX}network.${sectorId}.${scope}`
-export const sectorsKey = (scope: CacheScope) => `${CACHE_PREFIX}sectors.${scope}`
-// imported layers are only ever listed for a signed-in user
+// Nothing is public any more: every entry below was read by a signed-in, authorised user.
+export const networkKey = (sectorId: string) => `${CACHE_PREFIX}network.${sectorId}`
+export const sectorsKey = () => `${CACHE_PREFIX}sectors`
 export const layersKey = (sectorId: string) => `${CACHE_PREFIX}layers.${sectorId}`
 // station lists worked out so far for older layers: a run that was cut short resumes instead of reading again
 export const stationsProgressKey = (sectorId: string) => `${layersKey(sectorId)}.stations`
-// backup plans carry real station numbers: members only, like the layers
+// backup plans carry real station numbers
 export const plansKey = (sectorId: string) => `${CACHE_PREFIX}plans.${sectorId}`
 
-const MEMBER_ONLY = ['layers.', 'plans.'].map((name) => `${CACHE_PREFIX}${name}`)
+const DATA_NAMES = ['network', 'sectors', 'layers', 'plans']
 
-const isMemberKey = (key: string) =>
-  key.startsWith(CACHE_PREFIX) && (key.endsWith('.member') || MEMBER_ONLY.some((prefix) => key.startsWith(prefix)))
+/**
+ * Whether a key holds something read from the database. By name rather than by
+ * the exact keys above, so the copies older releases left behind (they kept a
+ * visitor's network apart from a member's) go as well. What the browser keeps
+ * about the person's taste — theme, basemap — is not data and stays.
+ */
+export const isDataKey = (key: string) =>
+  DATA_NAMES.some((name) => key === `${CACHE_PREFIX}${name}` || key.startsWith(`${CACHE_PREFIX}${name}.`))
 
-/** What a signed-in user read does not stay on the device after they leave; a visitor's entries hold public data only. */
-export const clearMemberCache = () => cache.clear(isMemberKey)
+const cleaners = new Set<() => void>()
+
+/** For services that also hold what they read in memory: `clean` runs whenever the saved data is dropped. */
+export const onDataCleared = (clean: () => void) => void cleaners.add(clean)
+
+/** Nothing read from the database stays on the device, or in memory, after the user leaves. */
+export function clearDataCache() {
+  cache.clear(isDataKey)
+  for (const clean of cleaners) clean()
+}

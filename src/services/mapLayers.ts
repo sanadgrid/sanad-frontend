@@ -4,9 +4,10 @@ import { layerIdOf } from '../features/restoration/import/layerId'
 import { stationDirectory, type StationEntry } from '../features/restoration/import/stations'
 import type { Bbox, CompactFeature, LayerCounts } from '../features/restoration/import/types'
 import type { Visibility } from '../features/restoration/types'
-import { db, isFirebaseConfigured } from '../lib/firebase'
+import { isFirebaseConfigured } from '../lib/firebase'
+import { db } from '../lib/firestore'
 import { currentUid, isCurrentUserAdmin } from './auth'
-import { cache, layersKey, stationsProgressKey } from './cache'
+import { cache, layersKey, onDataCleared, stationsProgressKey } from './cache'
 import { applyIndexChanges, fitIndex, sortLayers, type IndexChange } from './layerIndex'
 import { isDenied, isUnreachable, serverDocs, shared, withTimeout } from './reads'
 import { commit, WRITE_OVERHEAD_BYTES, type Write } from './writes'
@@ -116,18 +117,13 @@ function updateIndex(sectorId: string, changes: IndexChange[]): Promise<MapLayer
 }
 
 /**
- * Never throws. Imported layers are restricted, so a visitor has none — and is
- * not worth a read — and a signed-in user who is not a member of the sector is
- * refused the query: both simply see no imported layers.
+ * Never throws. Whoever is refused the query — not a member of this sector any
+ * more — simply sees no imported layers, as does a session that just ended.
  */
 export async function listMapLayers(sectorId: string): Promise<MapLayer[]> {
   if (!isFirebaseConfigured) return []
   const uid = await currentUid()
-  if (!uid) {
-    // nothing read by the previous user outlives their session
-    features.clear()
-    return []
-  }
+  if (!uid) return []
   return shared(`layers:${sectorId}:${uid}`, async () => {
     const key = layersKey(sectorId)
     const saved = cache.get<MapLayer[]>(key, uid)
@@ -170,6 +166,12 @@ export function loadLayerFeatures(sectorId: string, layerId: string): Promise<Co
 
 // one attempt per sector and page: a run that failed is not repeated until the page is opened again
 const directoryRuns = new Map<string, DirectoryRun>()
+
+// nothing read by one user outlives their session, in memory either
+onDataCleared(() => {
+  features.clear()
+  directoryRuns.clear()
+})
 const PARALLEL_DIRECTORY_READS = 3
 
 type Progress = (done: number, total: number) => void

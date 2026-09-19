@@ -1,0 +1,159 @@
+/* Shared by the dashboard and the gate in front of it, which is on screen
+   before the dashboard's own stylesheet has been downloaded. */
+
+/* Theme tokens. Light is the default; the dark control-room palette is kept
+   under [data-theme='dark']. They live on .rc, not :root, so the landing page
+   never sees them. Colours Leaflet draws from JS are in mapTheme.ts. */
+.rc {
+  color-scheme: light;
+
+  /* surfaces */
+  --rc-page:
+    radial-gradient(70% 36% at 50% 0%, rgba(0, 179, 198, 0.11), transparent 70%),
+    radial-gradient(40% 30% at 92% 0%, rgba(8, 120, 201, 0.07), transparent 70%), #f3f9fd;
+  --rc-bar: rgba(255, 255, 255, 0.9);
+  --rc-surface: #fff;
+  --rc-raised: #fff;
+  --rc-raised-hover: #eaf6fc;
+  --rc-inset: #f4fbff;
+  --rc-fill: #f7fbfe;
+  --rc-track: #dce8f1;
+  --rc-toggle-off: #a3b7c9;
+  --rc-knob: #fff;
+  --rc-glass: none;
+
+  /* lines and depth */
+  --rc-line: #dbe9f3;
+  --rc-line-soft: #e6f0f7;
+  --rc-line-strong: #bcd2e3;
+  --rc-shadow: 0 12px 36px rgba(20, 91, 137, 0.08);
+  --rc-shadow-pop: 0 12px 32px rgba(10, 35, 64, 0.16);
+  --rc-scrollbar: rgba(20, 91, 137, 0.3);
+
+  /* text */
+  --rc-heading: #061f58;
+  --rc-text: #0a2340;
+  --rc-text-strong: #061f58;
+  --rc-text-2: #33506b;
+  --rc-muted: #5b7189;
+  --rc-faint: #5f758c;
+
+  /* accent. The fill carries white text, so its cyan end is deepened to keep
+     4.5:1; the brighter cyan is kept for the rule on the KPI cards. */
+  --rc-accent: #0878c9;
+  --rc-accent-strong: #0667ad;
+  --rc-accent-soft: #eaf6fc;
+  --rc-accent-line: rgba(8, 120, 201, 0.55);
+  --rc-accent-fill: linear-gradient(135deg, #0878c9, #0a7f9f);
+  --rc-accent-fill-hover: linear-gradient(135deg, #0667ad, #086f8c);
+  --rc-accent-rule: linear-gradient(90deg, #0878c9, #00b3c6);
+  --rc-on-accent: #fff;
+  --rc-focus: #0878c9;
+  --rc-focus-halo: rgba(8, 120, 201, 0.3);
+
+  /* status: the fills are shared by both themes; text on a light surface needs
+     the darker variants to reach 4.5:1 */
+  --rc-ok: #19bd85;
+  --rc-warn: #f1bf37;
+  --rc-limited: #ff7f42;
+  --rc-bad: #ef476f;
+  --rc-info: #4aa3ff;
+  --rc-ok-text: #08774f;
+  --rc-warn-text: #8a5f00;
+  --rc-limited-text: #b13a09;
+  --rc-bad-text: #c81e4a;
+  --rc-ok-soft: #e3f7ef;
+  --rc-warn-soft: #fdf3d3;
+  --rc-limited-soft: #ffeadf;
+  --rc-bad-soft: #fde7ec;
+  /* how much of a chip's text colour its border takes */
+  --rc-chip-line: 35%;
+
+  /* customer tags */
+  --rc-sensitive-text: #b0175f;
+  --rc-sensitive-soft: #fde8f2;
+  --rc-vip-text: #7a5312;
+  --rc-vip-soft: #f7eddc;
+
+  /* map */
+  --rc-map-bg: #e9eff4;
+  --rc-tile-filter: saturate(0.5) brightness(1.05) contrast(0.92);
+  --rc-marker-filter: drop-shadow(0 1px 2px rgba(10, 35, 64, 0.45));
+  --rc-attribution: rgba(255, 255, 255, 0.82);
+
+  /* backup plans on the map: how loaded a backup ends up, the rim that lifts a
+     link off the basemap, and the ring of the main station */
+  --rc-link-calm: #0b9a68;
+  --rc-link-near: #d97706;
+  --rc-link-over: #e11d48;
+  --rc-link-casing: #fff;
+  --rc-link-main: #0a2340;
+}
+
+.rc[data-theme='dark'] {
+  color-scheme: dark;
+
+  --rc-page:
+    radial-gradient(60% 40% at 85% 0%, rgba(22, 104, 227, 0.2), transparent 70%),
+    radial-gradient(40% 30% at 5% 12%, rgba(0, 179, 198, 0.1), transparent 70%), #030d1c;
+  --rc-bar: rgba(4, 16, 32, 0.86);
+  --rc-surface: linear-gradient(160deg, rgba(16, 46, 84, 0.62), rgba(5, 20, 40, 0.86));
+  --rc-raised: #071a33;
+  --rc-raised-hover: #123258;
+  --rc-inset: rgba(3, 13, 28, 0.55);
+  --rc-fill: rgba(255, 255, 255, 0.04);
+  --rc-track: rgba(255, 255, 255, 0.1);
+  --rc-toggle-off: rgba(255, 255, 255, 0.14);
+  --rc-glass: blur(14px);
+
+  --rc-line: rgba(140, 200, 240, 0.16);
+  --rc-line-soft: rgba(255, 255, 255, 0.07);
+  --rc-line-strong: rgba(255, 255, 255, 0.15);
+  --rc-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --rc-shadow-pop: 0 14px 36px rgba(0, 0, 0, 0.5);
+  --rc-scrollbar: rgba(140, 200, 240, 0.3);
+
+  --rc-heading: #eaf5ff;
+  --rc-text: #eaf5ff;
+  --rc-text-strong: #fff;
+  --rc-text-2: #c4d4e3;
+  --rc-muted: #9db2c7;
+  --rc-faint: #7f97ae;
+
+  --rc-accent: #00b3c6;
+  --rc-accent-strong: #5fe6f0;
+  --rc-accent-soft: rgba(0, 179, 198, 0.1);
+  --rc-accent-line: rgba(95, 230, 240, 0.5);
+  --rc-accent-fill: linear-gradient(135deg, #1668e3, #00b3c6);
+  --rc-accent-fill-hover: linear-gradient(135deg, #2a78ee, #12c3d6);
+  --rc-accent-rule: linear-gradient(90deg, #1668e3, #00b3c6);
+  --rc-focus: #5fe6f0;
+  --rc-focus-halo: rgba(95, 230, 240, 0.45);
+
+  /* on navy the fills are already legible as text */
+  --rc-ok-text: #19bd85;
+  --rc-warn-text: #f1bf37;
+  --rc-limited-text: #ff7f42;
+  --rc-bad-text: #ef476f;
+  --rc-ok-soft: rgba(39, 211, 142, 0.12);
+  --rc-warn-soft: rgba(231, 167, 80, 0.14);
+  --rc-limited-soft: rgba(255, 127, 66, 0.12);
+  --rc-bad-soft: rgba(239, 71, 111, 0.12);
+  --rc-chip-line: 100%;
+
+  --rc-sensitive-text: #ff9ecb;
+  --rc-sensitive-soft: rgba(255, 158, 203, 0.12);
+  --rc-vip-text: #d7b58a;
+  --rc-vip-soft: rgba(215, 181, 138, 0.14);
+
+  --rc-map-bg: #0a1524;
+  --rc-tile-filter: invert(1) hue-rotate(190deg) saturate(0.45) brightness(0.82) contrast(0.92);
+  --rc-marker-filter: none;
+  --rc-attribution: rgba(3, 13, 28, 0.72);
+
+  --rc-link-calm: #34d399;
+  --rc-link-near: #fbbf24;
+  --rc-link-over: #ff6b81;
+  --rc-link-casing: #061b35;
+  --rc-link-main: #fff;
+}

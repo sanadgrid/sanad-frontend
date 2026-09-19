@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -18,9 +17,8 @@ export const isFirebaseConfigured = Boolean(
 // getAuth() throws on an empty apiKey, which would break every module importing
 // this file. A placeholder keeps the imports safe; services check
 // `isFirebaseConfigured` before making any call.
-const app = initializeApp(isFirebaseConfigured ? firebaseConfig : { ...firebaseConfig, apiKey: 'unconfigured' })
+export const app = initializeApp(isFirebaseConfigured ? firebaseConfig : { ...firebaseConfig, apiKey: 'unconfigured' })
 
+// The database lives in ./firestore.ts: whoever only needs to know who is signed
+// in — the gate in front of the dashboard — must not download Firestore for it.
 export const auth = getAuth(app)
-// The project's Firestore database is named `sanadgrid`, not `(default)`.
-// Must match `firestore.database` in the backend repo's firebase.json.
-export const db = getFirestore(app, 'sanadgrid')

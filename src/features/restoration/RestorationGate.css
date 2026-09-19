@@ -1,0 +1,194 @@
+/* The gate in front of the dashboard: one quiet card. It shares the dashboard's
+   tokens (tokens.css) and nothing else — the dashboard's stylesheet is not
+   downloaded for somebody who is not let in. `.rc.rc-gate` outweighs the
+   dashboard's `.rc` layout, which is around once somebody signs out of it. */
+.rc.rc-gate {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  place-items: center;
+  min-height: 100svh;
+  padding: 24px 16px;
+  background: var(--rc-page);
+  color: var(--rc-text);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.rc-gate :focus-visible {
+  outline-color: var(--rc-focus);
+}
+
+.rc-gate__card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(100%, 440px);
+  padding: 36px 32px 28px;
+  border: 1px solid var(--rc-line);
+  border-radius: 20px;
+  background: var(--rc-surface);
+  box-shadow: var(--rc-shadow);
+  -webkit-backdrop-filter: var(--rc-glass);
+  backdrop-filter: var(--rc-glass);
+  text-align: center;
+}
+
+.rc-gate__brand {
+  margin-bottom: 14px;
+}
+
+.rc-gate__card h1 {
+  margin: 0;
+  color: var(--rc-heading);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.6;
+  text-wrap: balance;
+}
+
+.rc-gate__card p {
+  margin: 0;
+  color: var(--rc-muted);
+}
+
+.rc-gate__account {
+  max-width: 100%;
+  padding: 4px 14px;
+  border: 1px solid var(--rc-line);
+  border-radius: 99px;
+  background: var(--rc-inset);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.rc-gate__card p.rc-gate__account {
+  color: var(--rc-text-2);
+}
+
+.rc-gate__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 14px;
+}
+
+.rc-gate__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 9px 20px;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 12px;
+  background: var(--rc-fill);
+  color: var(--rc-text);
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.rc-gate__btn:hover:not(:disabled) {
+  border-color: var(--rc-accent-line);
+  background: var(--rc-accent-soft);
+}
+
+.rc-gate__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rc-gate__btn--accent {
+  border-color: transparent;
+  background: var(--rc-accent-fill);
+  color: var(--rc-on-accent);
+}
+
+.rc-gate__btn--accent:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--rc-accent-fill-hover);
+}
+
+/* the provider's own button: white in both themes, its mark in its own colours */
+.rc-gate__btn--google {
+  width: 100%;
+  border-color: #dadce0;
+  background: #fff;
+  color: #1f1f1f;
+}
+
+.rc-gate__btn--google:hover:not(:disabled) {
+  border-color: #c6dafc;
+  background: #f6faff;
+}
+
+.rc-gate__problem {
+  font-size: 13.5px;
+}
+
+.rc-gate__card p.rc-gate__problem {
+  color: var(--rc-bad-text);
+}
+
+.rc-gate__home {
+  margin-top: 12px;
+  padding: 4px 8px;
+  color: var(--rc-accent-strong);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.rc-gate__home:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.rc-gate__spinner {
+  width: 26px;
+  height: 26px;
+  margin: 6px 0 4px;
+  border: 2.5px solid var(--rc-track);
+  border-top-color: var(--rc-accent);
+  border-radius: 50%;
+  animation: rc-gate-spin 0.9s linear infinite;
+}
+
+.rc-gate__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes rc-gate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-gate__spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+@media (max-width: 480px) {
+  .rc-gate__card {
+    padding: 30px 20px 22px;
+  }
+
+  .rc-gate__card h1 {
+    font-size: 17.5px;
+  }
+
+  .rc-gate__actions .rc-gate__btn {
+    width: 100%;
+  }
+}

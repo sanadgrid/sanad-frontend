@@ -20,3 +20,5 @@ interface ImportMeta {
 declare const __APP_VERSION__: string
 declare const __APP_COMMIT__: string
 declare const __APP_BUILT__: string
+/** Test builds only; always `false` in a build that holds the Firebase keys. */
+declare const __E2E_OPEN__: boolean
