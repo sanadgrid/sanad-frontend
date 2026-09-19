@@ -38,7 +38,7 @@ export function DataMenu({ actions, busy }: DataMenuProps) {
   }, [open])
 
   return (
-    <div className="rc-menu" ref={root}>
+    <div className="rc-menu rc-menu--corner" ref={root}>
       <button className="rc-btn" type="button" aria-haspopup="menu" aria-expanded={open} disabled={busy} onClick={() => setOpen(!open)}>
         <Icon name="database" size={15} />
         إدارة البيانات

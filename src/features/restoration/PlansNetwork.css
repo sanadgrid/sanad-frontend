@@ -30,6 +30,16 @@
   border-radius: 14px;
 }
 
+/* The data menu's button sits near the top bar's inline-start edge (the
+   screen's near corner), unlike the add-plan menu this class is shared with,
+   which sits at the opposite edge. Hanging it from inline-end, like the
+   default above, would grow it past that near corner and off the screen — it
+   needs to hang from inline-start instead, growing inward. */
+.rc-menu--corner .rc-menu__list {
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+}
+
 .rc-menu__list button {
   display: flex;
   align-items: flex-start;
