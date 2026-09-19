@@ -130,7 +130,7 @@ export function SupportCard({ node, canAdd, onPlan, onAddPlan, onClose }: Suppor
         {canAdd && (
           <button className="rc-btn" type="button" onClick={onAddPlan}>
             <Icon name="plus" size={15} />
-            إضافة خطة لهذه المحطة
+            بدء خطة لهذه المحطة
           </button>
         )}
       </div>

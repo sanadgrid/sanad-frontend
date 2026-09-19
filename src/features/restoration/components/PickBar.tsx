@@ -1,16 +1,22 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
 import { MANY_BACKUPS, nextTarget, usedBackups, type PlanDraft } from '../backup/draft'
 import { ordinal } from '../backup/format'
 
 interface PickBarProps {
   draft: PlanDraft
+  /** The steps of a plan written step by step, above the question. */
+  steps?: ReactNode
+  /** Another way to a station than finding its square: by its number. */
+  find?: ReactNode
+  /** Shown instead of the buttons: a question that must be answered first. */
+  asking?: ReactNode
   onDone: () => void
   onCancel: () => void
 }
 
 /** The form, while the stations are being clicked on the map: what the next click sets, and what has been set. */
-export function PickBar({ draft, onDone, onCancel }: PickBarProps) {
+export function PickBar({ draft, steps, find, asking, onDone, onCancel }: PickBarProps) {
   const bar = useRef<HTMLDivElement>(null)
   const cancel = useRef(onCancel)
   useEffect(() => {
@@ -34,10 +40,12 @@ export function PickBar({ draft, onDone, onCancel }: PickBarProps) {
 
   return (
     <div className="rc-pickbar" ref={bar} tabIndex={-1} role="group" aria-label="اختيار محطات الخطة من الخريطة">
+      {steps}
       <p className="rc-pickbar__ask" aria-live="polite">
         <Icon name="crosshair" size={16} />
         {target === 'main' ? 'اضغط على المحطة الرئيسية' : `اضغط على البديل ${ordinal(target)}`}
       </p>
+      {find}
 
       {(draft.main.no.trim() || backups.length > 0) && (
         <ul className="rc-pickbar__picked" aria-label="ما تم اختياره">
@@ -72,15 +80,17 @@ export function PickBar({ draft, onDone, onCancel }: PickBarProps) {
             : 'اختر المحطة الرئيسية ثم بديلاً واحداً على الأقل.'}
       </p>
 
-      <div className="rc-pickbar__foot">
-        <button className="rc-btn rc-btn--accent" type="button" disabled={!ready} onClick={onDone}>
-          <Icon name="check" size={15} />
-          تم
-        </button>
-        <button className="rc-btn" type="button" onClick={onCancel}>
-          إلغاء
-        </button>
-      </div>
+      {asking ?? (
+        <div className="rc-pickbar__foot">
+          <button className="rc-btn rc-btn--accent" type="button" disabled={!ready} onClick={onDone}>
+            <Icon name="check" size={15} />
+            تم
+          </button>
+          <button className="rc-btn" type="button" onClick={onCancel}>
+            إلغاء
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -5,13 +5,14 @@ interface StationNoFieldProps {
   label: string
   value: string
   directory: StationDirectory
+  placeholder?: string
   onChange: (value: string) => void
 }
 
 const MAX_SUGGESTIONS = 6
 
 /** A station number, completed from the stations of the imported layers — what is typed reads nothing. */
-export function StationNoField({ label, value, directory, onChange }: StationNoFieldProps) {
+export function StationNoField({ label, value, directory, placeholder = 'الرقم', onChange }: StationNoFieldProps) {
   const [focused, setFocused] = useState(false)
   const listId = useId()
   const found = value.trim() ? locate(directory, value) : null
@@ -30,7 +31,7 @@ export function StationNoField({ label, value, directory, onChange }: StationNoF
         aria-expanded={options.length > 0}
         aria-controls={listId}
         aria-invalid={Boolean(value.trim()) && !found}
-        placeholder="الرقم"
+        placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setFocused(true)}

@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../../components/Icon'
 import { normalizeQuery, searchStations, stationNameOf, type StationHit } from '../import/stations'
+import type { LayerActions } from '../dataActions'
 import { featureCount, type Bbox } from '../import/types'
 import { fmt } from '../labels'
 import { findDuplicateLayers } from '../layerDuplicates'
 import { swatchStyle } from '../layerPalette'
 import type { ImportedLayers } from '../useMapLayers'
 import { LayerContents } from './LayerContents'
+import { LayersTrash } from './LayersTrash'
 import type { Place } from './mapView'
 
 interface ImportedLayersListProps {
@@ -17,12 +19,14 @@ interface ImportedLayersListProps {
   onZoom: (bbox: Bbox) => void
   /** Show one station, line or area of a layer on the map. */
   onPoint: (layerId: string, place: Place) => void
-  onDelete: (layerId: string) => void
-  /** Twin layers of one imported file, to be deleted in one go. */
-  onDeleteMany: (layerIds: string[]) => void
   /** The stations of every layer as an Excel file: reads nothing, so anyone may. */
   onExportStations?: () => void
+  /** Deleting hides a layer and keeps it for thirty days; only the trash deletes for good. */
+  actions: LayerActions
 }
+
+const LAYER_DELETE_NOTE = 'سيتم إخفاء الطبقة ومحطاتها من الخريطة. لا تتأثر الخطط المحفوظة، ويمكنك استعادتها خلال 30 يوماً.'
+
 
 // more than this and the number typed is too short to be looking for one station
 const MAX_HITS = 30
@@ -35,14 +39,19 @@ const placeOfHit = ({ station }: StationHit): Place => ({ at: station.c, text: {
 const layersPhrase = (count: number) =>
   count === 1 ? 'توجد طبقة مكررة واحدة' : count === 2 ? 'توجد طبقتان مكررتان' : count <= 10 ? `توجد ${fmt(count)} طبقات مكررة` : `توجد ${fmt(count)} طبقة مكررة`
 
-export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint, onDelete, onDeleteMany, onExportStations }: ImportedLayersListProps) {
-  const { layers, active, loading, failed, contents } = imported
+export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint, onExportStations, actions }: ImportedLayersListProps) {
+  const { layers, active, loading, failed, contents, purgeExpired } = imported
   // the layer whose deletion is waiting for a second, explicit click
   const [confirming, setConfirming] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [current, setCurrent] = useState<string | null>(null)
   const [confirmingTwins, setConfirmingTwins] = useState(false)
+
+  // an admin looking at the list is when what has waited thirty days in the trash goes for good
+  useEffect(() => {
+    if (canDelete) purgeExpired()
+  }, [canDelete, purgeExpired])
 
   // Twins of one source file, told from what the list already says — nothing is
   // read. Deleting is an admin's: nobody else is shown any of this.
@@ -124,20 +133,20 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
                 ))}
               </ul>
               <p>
-                <span>الحذف نهائي، والطبقة الباقية لا تتأثر.</span>
+                <span>الطبقة الباقية لا تتأثر، ويمكنك استعادة المحذوفة خلال 30 يوماً.</span>
+                <button className="rc-link" type="button" autoFocus onClick={() => setConfirmingTwins(false)}>
+                  إلغاء
+                </button>
                 <button
                   className="rc-link rc-link--danger"
                   type="button"
                   disabled={busy}
                   onClick={() => {
                     setConfirmingTwins(false)
-                    onDeleteMany([...doomed])
+                    void actions.remove([...doomed])
                   }}
                 >
                   حذف <span className="num">{fmt(doomed.size)}</span>
-                </button>
-                <button className="rc-link" type="button" onClick={() => setConfirmingTwins(false)}>
-                  تراجع
                 </button>
               </p>
             </>
@@ -148,7 +157,7 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
       {imported.removing && (
         <p className="rc-imported__status" role="status">
           <span className="rc-spinner" aria-hidden="true" />
-          جارٍ حذف الطبقات المكررة…{' '}
+          جارٍ الحذف النهائي…{' '}
           <bdi className="num" dir="ltr">{`${fmt(imported.removing.done)} / ${fmt(imported.removing.total)}`}</bdi>
         </p>
       )}
@@ -261,23 +270,26 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
           const open = expanded.has(layer.id)
           const stations = layer.stations?.length ?? 0
           return confirming === layer.id ? (
-            <li key={layer.id} className="rc-imported__confirm" role="alert">
+            <li key={layer.id} className="rc-imported__confirm rc-imported__confirm--soft" role="alert">
               <span>
-                حذف «<bdi>{layer.name}</bdi>» نهائياً؟
+                <b>
+                  حذف «<bdi>{layer.name}</bdi>»؟
+                </b>{' '}
+                {LAYER_DELETE_NOTE}
               </span>
+              <button className="rc-link" type="button" autoFocus onClick={() => setConfirming(null)}>
+                إلغاء
+              </button>
               <button
                 className="rc-link rc-link--danger"
                 type="button"
                 disabled={busy}
                 onClick={() => {
                   setConfirming(null)
-                  onDelete(layer.id)
+                  void actions.remove([layer.id])
                 }}
               >
-                حذف
-              </button>
-              <button className="rc-link" type="button" onClick={() => setConfirming(null)}>
-                تراجع
+                حذف الطبقة
               </button>
             </li>
           ) : (
@@ -363,6 +375,8 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
           )
         })}
       </ul>
+
+      {canDelete && <LayersTrash trashed={imported.trashed} busy={busy || Boolean(imported.removing)} onRestore={actions.restore} onDestroy={actions.destroy} />}
     </div>
   )
 }

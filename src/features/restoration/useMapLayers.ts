@@ -1,25 +1,41 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { expiredLayers, liveLayers, trashedLayers } from '../../services/layerIndex'
 import {
   backfillStationDirectories,
-  deleteMapLayer,
+  canPurgeLayers,
   deleteMapLayers,
   listMapLayers,
   loadLayerFeatures,
+  restoreMapLayers,
+  trashMapLayers,
   type MapLayer,
   type RemovedLayers,
 } from '../../services/mapLayers'
 import { featureCount, type CompactFeature } from './import/types'
 
-/** Where the layers are kept. The page uses the database; anything with the same four functions will do. */
+/** Where the layers are kept. The page uses the database; anything with the same functions will do. */
 export interface LayerSource {
+  /** Every layer of the index, those waiting in the trash included. */
   list: (sectorId: string) => Promise<MapLayer[]>
   load: (sectorId: string, layerId: string) => Promise<CompactFeature[]>
-  remove: (sectorId: string, layerId: string) => Promise<void>
+  /** Into the trash and out of it: the list alone changes. Both resolve with the whole list. */
+  trash: (sectorId: string, layerIds: string[]) => Promise<MapLayer[]>
+  restore: (sectorId: string, layerIds: string[]) => Promise<MapLayer[]>
+  /** For good: the parts of the layers are deleted. */
   removeMany: typeof deleteMapLayers
+  canPurge: () => Promise<boolean>
   backfill: typeof backfillStationDirectories
 }
 
-const database: LayerSource = { list: listMapLayers, load: loadLayerFeatures, remove: deleteMapLayer, removeMany: deleteMapLayers, backfill: backfillStationDirectories }
+const database: LayerSource = {
+  list: listMapLayers,
+  load: loadLayerFeatures,
+  trash: trashMapLayers,
+  restore: restoreMapLayers,
+  removeMany: deleteMapLayers,
+  canPurge: canPurgeLayers,
+  backfill: backfillStationDirectories,
+}
 
 // Every part of a layer is a billed read and a download: a hundred layers ticked
 // at once are fetched a few at a time, so the page stays responsive and the rest
@@ -35,7 +51,10 @@ export interface VisibleLayer {
 }
 
 export interface ImportedLayers {
+  /** The layers in use. One waiting in the trash is not among them, so nothing built on this list knows it. */
   layers: MapLayer[]
+  /** Deleted within the last thirty days, the latest first. */
+  trashed: MapLayer[]
   active: ReadonlySet<string>
   /** Asked for, and still on their way. */
   loading: ReadonlySet<string>
@@ -55,11 +74,14 @@ export interface ImportedLayers {
   /** Fetches a layer's features without showing it: its contents are being listed. */
   request: (layerId: string) => void
   hideAll: () => void
-  /** Rejects when the layer could not be deleted. */
-  remove: (layerId: string) => Promise<void>
-  /** One after the other, stopping at the first that fails; resolves with what went. */
-  removeMany: (layerIds: string[]) => Promise<RemovedLayers>
-  /** While several layers are being deleted: how many are gone. */
+  /** Into the trash: hidden at once, restorable for thirty days. Rejects when the list could not be written. */
+  remove: (layerIds: string[]) => Promise<void>
+  restore: (layerIds: string[]) => Promise<void>
+  /** For good, one after the other, stopping at the first that fails; resolves with what went. */
+  destroy: (layerIds: string[]) => Promise<RemovedLayers>
+  /** What has waited in the trash for more than thirty days goes for good — an admin's visit to the list does it. */
+  purgeExpired: () => void
+  /** While several layers are being deleted for good: how many are gone. */
   removing: { done: number; total: number } | null
   /** After an import: the list is read again and the given layers are fetched afresh. */
   refresh: (changed: string[]) => void
@@ -73,7 +95,7 @@ const without = <T>(set: ReadonlySet<T>, ...items: T[]) => new Set([...set].filt
  * network; what the signed-in user may see is decided by the database rules.
  */
 export function useMapLayers(sectorId: string | undefined, uid: string | undefined, source: LayerSource = database): ImportedLayers {
-  const [layers, setLayers] = useState<MapLayer[]>([])
+  const [listed, setListed] = useState<MapLayer[]>([])
   const [active, setActive] = useState<ReadonlySet<string>>(new Set())
   const [requested, setRequested] = useState<ReadonlySet<string>>(new Set())
   const [indexing, setIndexing] = useState(false)
@@ -92,7 +114,7 @@ export function useMapLayers(sectorId: string | undefined, uid: string | undefin
       if (cancelled) return
       // another sector or a signed-out user: what no longer exists is dropped
       const ids = new Set(list.map((layer) => layer.id))
-      setLayers(list)
+      setListed(list)
       setActive((current) => new Set([...current].filter((id) => ids.has(id))))
       setRequested((current) => new Set([...current].filter((id) => ids.has(id))))
       setLoaded((current) => new Map([...current].filter(([id]) => ids.has(id))))
@@ -102,6 +124,9 @@ export function useMapLayers(sectorId: string | undefined, uid: string | undefin
     }
   }, [sectorId, uid, revision, source])
 
+  const layers = useMemo(() => liveLayers(listed), [listed])
+  const trashed = useMemo(() => trashedLayers(listed), [listed])
+
   // Older layers do not list their stations yet. An admin's visit works the lists
   // out once; for anyone else this settles at once and changes nothing.
   useEffect(() => {
@@ -110,7 +135,7 @@ export function useMapLayers(sectorId: string | undefined, uid: string | undefin
     source.backfill(sectorId, layers, () => !cancelled && setIndexing(true)).then((updated) => {
       if (cancelled) return
       setIndexing(false)
-      if (updated) setLayers(updated)
+      if (updated) setListed(updated)
     })
     return () => {
       cancelled = true
@@ -193,23 +218,29 @@ export function useMapLayers(sectorId: string | undefined, uid: string | undefin
   }, [bulkIds, active, loaded, failed])
 
   const remove = useCallback(
-    async (layerId: string) => {
+    async (layerIds: string[]) => {
       if (!sectorId) return
-      await source.remove(sectorId, layerId)
-      setLayers((current) => current.filter((layer) => layer.id !== layerId))
-      setActive((current) => without(current, layerId))
+      setListed(await source.trash(sectorId, layerIds))
+      setActive((current) => without(current, ...layerIds))
     },
     [sectorId, source],
   )
 
-  const removeMany = useCallback(
+  const restore = useCallback(
+    async (layerIds: string[]) => {
+      if (sectorId) setListed(await source.restore(sectorId, layerIds))
+    },
+    [sectorId, source],
+  )
+
+  const destroy = useCallback(
     async (layerIds: string[]): Promise<RemovedLayers> => {
       if (!sectorId) return { removed: [], failed: null }
       setRemoving({ done: 0, total: layerIds.length })
       try {
         const result = await source.removeMany(sectorId, layerIds, (done, total) => setRemoving({ done, total }))
-        // what is gone leaves the list and the map, also when a later one stopped the run
-        setLayers((current) => current.filter((layer) => !result.removed.includes(layer.id)))
+        // what is gone leaves the list, also when a later one stopped the run
+        setListed((current) => current.filter((layer) => !result.removed.includes(layer.id)))
         setActive((current) => without(current, ...result.removed))
         return result
       } finally {
@@ -219,11 +250,23 @@ export function useMapLayers(sectorId: string | undefined, uid: string | undefin
     [sectorId, source],
   )
 
+  // once per list: a run that stopped half-way leaves the rest listed, and the next visit goes on from there
+  const purged = useRef<MapLayer[] | null>(null)
+  const purgeExpired = useCallback(() => {
+    const expired = expiredLayers(listed, Date.now()).map((layer) => layer.id)
+    if (expired.length === 0 || purged.current === listed) return
+    purged.current = listed
+    source
+      .canPurge()
+      .then((allowed) => (allowed ? destroy(expired) : null))
+      .catch((error) => console.warn('map layers: the expired layers could not be cleared —', error))
+  }, [listed, source, destroy])
+
   const refresh = useCallback((changed: string[]) => {
     setFailed((current) => without(current, ...changed))
     setLoaded((current) => new Map([...current].filter(([id]) => !changed.includes(id))))
     setRevision((r) => r + 1)
   }, [])
 
-  return { layers, active, loading, failed, visible, contents: loaded, indexing, bulk, removing, toggle, showMany, hideMany, request, hideAll, remove, removeMany, refresh }
+  return { layers, trashed, active, loading, failed, visible, contents: loaded, indexing, bulk, removing, toggle, showMany, hideMany, request, hideAll, remove, restore, destroy, purgeExpired, refresh }
 }

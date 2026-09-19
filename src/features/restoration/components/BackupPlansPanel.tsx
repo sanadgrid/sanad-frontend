@@ -4,6 +4,7 @@ import type { StationDirectory } from '../backup/directory'
 import { ordinal, ratioLabel } from '../backup/format'
 import { summarize, type BackupCase, type GroupSummary } from '../backup/model'
 import type { SupportLink } from '../backup/planNetwork'
+import type { PlanActions } from '../dataActions'
 import { normalizeQuery } from '../import/stations'
 import { fmt, STATUS } from '../labels'
 import type { BackupPlans } from '../useBackupPlans'
@@ -11,6 +12,8 @@ import type { PlanEditor } from '../usePlanEditor'
 import type { PlanRow } from '../usePlanNetwork'
 import { PlanDetail, Sensitivity, type SensitivityProps } from './PlanDetail'
 import { PlanForm } from './PlanForm'
+import { PlansTrash } from './PlansTrash'
+import { PlanWizard } from './PlanWizard'
 import { Toggle } from './Toggle'
 
 interface BackupPlansPanelProps {
@@ -36,6 +39,8 @@ interface BackupPlansPanelProps {
   onExport: () => void
   /** The same plans as an Excel workbook, in the columns the bulk entry reads. */
   onExportExcel: () => void
+  /** A new plan, by the shortest way in. */
+  onAdd: () => void
   /** Many plans at once, pasted from a spreadsheet. */
   onBulk: () => void
   onShowOnMap: () => void
@@ -43,7 +48,8 @@ interface BackupPlansPanelProps {
   onPicked: () => void
   /** These resolve to whether the change was written. */
   onSave: (saved: BackupCase) => Promise<boolean>
-  onDelete: (caseId: string) => Promise<boolean>
+  /** Deleting, and what the trash allows. */
+  actions: Pick<PlanActions, 'remove' | 'restore' | 'purge'>
   onRating: (ratingA: number) => Promise<boolean>
   onClose: () => void
 }
@@ -145,6 +151,20 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
             <span className="rc-spinner" aria-hidden="true" />
             جارٍ تحميل الخطط…
           </p>
+        ) : editor.draft && editor.guided ? (
+          <PlanWizard
+            editor={editor}
+            draft={editor.draft}
+            ratingA={ratingA}
+            directory={directory}
+            busy={busy}
+            onSave={async (saved) => {
+              const written = await props.onSave(saved)
+              if (written) props.onSelect(saved.id, saved)
+              return written
+            }}
+            onPicked={props.onPicked}
+          />
         ) : editor.draft ? (
           <>
             {!editor.picking && <h3 className="rc-detail__title">{editor.isNew ? 'خطة جديدة' : 'تعديل الخطة'}</h3>}
@@ -175,7 +195,7 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
             onBack={() => props.onSelect(null)}
             onEdit={() => editor.open(selected.plan)}
             onDelete={async () => {
-              if (await props.onDelete(selected.plan.id)) props.onSelect(null)
+              if (await props.actions.remove(selected.plan.id)) props.onSelect(null)
             }}
             onShowOnMap={props.onShowOnMap}
             supports={props.supports}
@@ -218,7 +238,7 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
 
             <div className="rc-plans__tools">
               {isAdmin && (
-                <button className="rc-btn rc-btn--accent" type="button" onClick={() => editor.open()}>
+                <button className="rc-btn rc-btn--accent" type="button" onClick={props.onAdd}>
                   <Icon name="plus" size={15} />
                   إضافة خطة
                 </button>
@@ -291,6 +311,8 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
                 </ul>
               </>
             )}
+
+            {isAdmin && <PlansTrash trash={plans.plan?.trash ?? []} busy={busy} onRestore={props.actions.restore} onPurge={props.actions.purge} />}
           </>
         )}
       </div>

@@ -4,7 +4,7 @@ import type { Visibility } from '../features/restoration/types'
 import { isFirebaseConfigured } from '../lib/firebase'
 import { db } from '../lib/firestore'
 import { currentUid } from './auth'
-import { applyPlanChanges, emptyPlan, fitsOneDocument, planOf, type BackupPlan, type PlanChange } from './backupPlanDoc'
+import { applyPlanChanges, emptyPlan, fitPlan, fitsOneDocument, planOf, type BackupPlan, type PlanChange } from './backupPlanDoc'
 import { cache, plansKey } from './cache'
 import { isDenied, isUnreachable, serverDocs, shared, withTimeout } from './reads'
 
@@ -43,6 +43,8 @@ export async function loadBackupPlan(sectorId: string): Promise<LoadedPlan | nul
   return shared(`plans:${sectorId}:${uid}`, async () => {
     const key = plansKey(sectorId)
     const saved = cache.get<BackupPlan>(key, uid)
+    // a copy kept by an earlier version of the page has no trash yet
+    if (saved) saved.value.trash ??= []
     if (saved && cache.isFresh(saved)) return { plan: saved.value }
     try {
       const plan = await withTimeout(readPlan(sectorId))
@@ -73,12 +75,14 @@ const waiting = new Map<string, PlanUpdate>()
 let lastUpdate: Promise<unknown> = Promise.resolve()
 
 async function writePlan(sectorId: string, changes: PlanChange[]): Promise<BackupPlan> {
-  const plan = applyPlanChanges(await readPlan(sectorId), changes)
+  const uid = await currentUid()
+  // the trash is tidied with every write: thirty days, and never at the cost of a plan
+  const plan = fitPlan(applyPlanChanges(await readPlan(sectorId), changes, { now: Date.now(), by: uid ?? undefined }))
   if (!fitsOneDocument(plan)) throw new Error('backup plans: the sector has more cases than one document can hold')
   // through JSON: a field that is `undefined` would be refused
-  const { ratingA, cases } = JSON.parse(JSON.stringify(plan)) as BackupPlan
-  await setDoc(doc(db, PLANS, sectorId), { sectorId, visibility: RESTRICTED, ratingA, cases, updatedAt: serverTimestamp() })
-  cache.set(plansKey(sectorId), await currentUid(), plan)
+  const { ratingA, cases, trash } = JSON.parse(JSON.stringify(plan)) as BackupPlan
+  await setDoc(doc(db, PLANS, sectorId), { sectorId, visibility: RESTRICTED, ratingA, cases, trash, updatedAt: serverTimestamp() })
+  cache.set(plansKey(sectorId), uid, plan)
   return plan
 }
 
@@ -102,7 +106,10 @@ function updatePlan(sectorId: string, changes: PlanChange[]): Promise<BackupPlan
 
 // The rules only accept these from an admin. Each resolves with the plan as written.
 export const saveBackupCase = (sectorId: string, saved: BackupCase) => updatePlan(sectorId, [{ upsert: saved }])
-/** Many cases at once — a bulk entry: still one read and one write, whatever their number. */
-export const saveBackupCases = (sectorId: string, saved: BackupCase[]) => updatePlan(sectorId, saved.map((upsert) => ({ upsert })))
-export const deleteBackupCase = (sectorId: string, caseId: string) => updatePlan(sectorId, [{ remove: caseId }])
+/** Many cases at once — a bulk entry: still one read and one write, whatever their number. A plan it overwrites goes to the trash. */
+export const saveBackupCases = (sectorId: string, saved: BackupCase[]) => updatePlan(sectorId, saved.map((upsert) => ({ upsert, keepReplaced: true })))
+/** Into the trash of the same document; `at` names the trashed case afterwards (`trashKey`). */
+export const deleteBackupCase = (sectorId: string, caseId: string, at: number) => updatePlan(sectorId, [{ remove: caseId, at }])
+export const restoreBackupCase = (sectorId: string, key: string) => updatePlan(sectorId, [{ restore: key }])
+export const purgeBackupCase = (sectorId: string, key: string) => updatePlan(sectorId, [{ purge: key }])
 export const setDefaultRating = (sectorId: string, ratingA: number) => updatePlan(sectorId, [{ ratingA }])

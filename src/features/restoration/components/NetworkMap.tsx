@@ -8,6 +8,7 @@ import { mapTiles } from '../mapTiles'
 import type { LatLng } from '../types'
 import type { VisibleLayer } from '../useMapLayers'
 import type { Theme } from '../useTheme'
+import { drawBaseStations, type BaseStationLayer } from './baseStationLayer'
 import {
   describeOnMap,
   drawImportedLayer,
@@ -23,6 +24,7 @@ import { fitBbox, fitPoints, flyToPoint, followClearArea, panTo, patientFit, typ
 import { drawPickLayer, PICK_PANE, PICK_PANE_Z, pointOut, type PickLayer } from './pickLayer'
 import { drawPlans, PLAN_PANE, PLAN_PANE_Z, type PlanDrawing } from './planLinks'
 import { drawPlanNetwork, LABEL_PANE, LABEL_PANE_Z, type MapLink, type MapNode, type Themed } from './planNetworkLayers'
+import type { StationActions } from './stationPopup'
 
 interface NetworkMapProps {
   center: LatLng
@@ -32,6 +34,10 @@ interface NetworkMapProps {
   links: MapLink[]
   /** Imported layers that are ticked and loaded, drawn under the network. */
   imported: VisibleLayer[]
+  /** Every station of the sector that nothing else draws, as quiet squares; `null` when they are switched off. */
+  base: StationPoint[] | null
+  /** What the popup of a station offers: start its plan, open the one it has. */
+  stationActions: StationActions
   /** Set to move the map; a new object moves it again. */
   view: MapView | null
   /** The part of the map that no panel covers: views are aimed at it. */
@@ -72,14 +78,14 @@ interface Pointed {
 
 // The index knows a station by its name and place only; the rest of its popup
 // comes from the layer itself, as soon as that is on the map.
-function completeDetail(at: Pointed, features: VisibleLayer['features'] | undefined) {
+function completeDetail(at: Pointed, features: VisibleLayer['features'] | undefined, actionsOf: StationActions) {
   if (!features) return
   at.drawn = true
   if (!at.place.partial) return
   const { text } = at.place
   const [lng, lat] = at.place.at
   const found = features.find((f) => f.t === 'p' && f.c[0] === lng && f.c[1] === lat && f.n.trim() === text.n)
-  if (found) setDetail(at.popup, found)
+  if (found) setDetail(at.popup, found, [lat, lng], actionsOf)
   at.place = { ...at.place, partial: false }
 }
 
@@ -92,6 +98,8 @@ export function NetworkMap({
   nodes,
   links,
   imported,
+  base,
+  stationActions,
   view,
   clearArea,
   selectedKey,
@@ -115,19 +123,23 @@ export function NetworkMap({
   const drawn = useRef(new Map<string, DrawnLayer>())
   const pointed = useRef<Pointed | null>(null)
   const pickLayer = useRef<PickLayer | null>(null)
+  const baseLayer = useRef<BaseStationLayer | null>(null)
   // the latest values, for handlers and for views asked long after the markers were drawn
   const select = useRef(onSelect)
   const selectPlan = useRef(onSelectPlan)
   const pick = useRef(onPick)
+  const actions = useRef(stationActions)
+  const actionsOf = useRef<StationActions>((station) => actions.current(station))
   const framedPoints = useRef(frame)
   const shown = useRef(nodes)
   useEffect(() => {
     select.current = onSelect
     selectPlan.current = onSelectPlan
     pick.current = onPick
+    actions.current = stationActions
     shown.current = nodes
     framedPoints.current = frame
-  }, [onSelect, onSelectPlan, onPick, nodes, frame])
+  }, [onSelect, onSelectPlan, onPick, stationActions, nodes, frame])
 
   // Until the user moves the map himself, it keeps the stations framed in whatever
   // room the panels leave: opening the filters slides the network aside, not under them.
@@ -199,6 +211,7 @@ export function NetworkMap({
       planLinks.current = null
       canvas.current = null
       pickLayer.current = null
+      baseLayer.current = null
       importedLayers.clear()
       pointed.current = null
     }
@@ -288,7 +301,7 @@ export function NetworkMap({
     for (const { id, features, color } of imported) {
       if (drawn.current.has(id)) continue
       const layer = drawImportedLayer(features, renderer)
-      describeOnMap(layer.group, instance)
+      describeOnMap(layer.group, instance, actionsOf.current)
       drawn.current.set(id, { ...layer, features, color })
       changed = true
     }
@@ -298,7 +311,11 @@ export function NetworkMap({
       // added only once painted, so a layer never flashes in Leaflet's default blue
       layer.group.addTo(instance)
     }
-    if (changed) settleStations(drawn.current.values(), renderer)
+    if (changed) {
+      // the quiet squares stay over the lines and areas that just arrived, and under the stations of the layers
+      baseLayer.current?.toFront()
+      settleStations(drawn.current.values(), renderer)
+    }
 
     // The popup of a place found through the list: it learns its details when
     // its layer arrives, and leaves with the layer.
@@ -306,8 +323,31 @@ export function NetworkMap({
     if (!at?.popup.isOpen()) return
     const layer = imported.find(({ id }) => id === at.layerId)
     if (!layer && at.drawn) at.popup.close()
-    completeDetail(at, layer?.features)
+    completeDetail(at, layer?.features, actionsOf.current)
   }, [imported, theme])
+
+  // Every station of the sector, on the canvas of the imported layers: there
+  // whatever is ticked, and whatever happens to the plans.
+  useEffect(() => {
+    const instance = map.current
+    const renderer = canvas.current
+    if (!instance || !renderer || !base || base.length === 0) return
+    const layer = drawBaseStations(instance, renderer, base, actionsOf.current)
+    const { baseStation: fill, markerStroke: rim, baseLabel: label } = colors.current
+    layer.paint({ fill, rim, label })
+    baseLayer.current = layer
+    layer.addTo(instance)
+    settleStations(drawn.current.values(), renderer)
+    return () => {
+      layer.remove()
+      baseLayer.current = null
+    }
+  }, [base])
+
+  useEffect(() => {
+    const { baseStation: fill, markerStroke: rim, baseLabel: label } = themeColors(theme)
+    baseLayer.current?.paint({ fill, rim, label })
+  }, [base, theme])
 
   useEffect(() => {
     const instance = map.current
@@ -326,9 +366,9 @@ export function NetworkMap({
       const { place, layerId } = view
       if (place.bbox) fitBbox(instance, place.bbox, clearArea.current)
       else flyToPoint(instance, place.at, clearArea.current)
-      const popup = openDetail(instance, place.text, [place.at[1], place.at[0]], !place.bbox)
+      const popup = openDetail(instance, place.text, [place.at[1], place.at[0]], !place.bbox, actionsOf.current)
       pointed.current = { layerId, place, popup, drawn: false }
-      completeDetail(pointed.current, drawn.current.get(layerId)?.features)
+      completeDetail(pointed.current, drawn.current.get(layerId)?.features, actionsOf.current)
     } else if (view.kind === 'points') fitPoints(instance, view.points, clearArea.current)
     else if (view.kind === 'zoom') instance.setZoom(instance.getZoom() + view.by)
     else if (view.kind === 'bbox') fitBbox(instance, view.bbox, clearArea.current)

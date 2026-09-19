@@ -8,14 +8,45 @@ export interface BackupPlan {
   /** The breaker rating a case is held to unless it names its own. */
   ratingA: number
   cases: BackupCase[]
+  /** Deleted cases, newest last: kept for thirty days so a deletion can be taken back. */
+  trash: TrashedCase[]
 }
 
-export type PlanChange = { upsert: BackupCase } | { remove: string } | { ratingA: number }
+export interface TrashedCase {
+  case: BackupCase
+  /** Milliseconds since the epoch, by the clock of whoever deleted it. */
+  deletedAt: number
+  deletedBy?: string
+}
+
+export type PlanChange =
+  /** `keepReplaced`: the case it replaces, if it differs, goes to the trash — a bulk entry overwriting a plan. */
+  | { upsert: BackupCase; keepReplaced?: boolean }
+  /** Into the trash. `at` is given by the caller, so it can name the trashed case afterwards. */
+  | { remove: string; at?: number }
+  /** Out of the trash, by `trashKey`; a live case with the same id takes its place there. */
+  | { restore: string }
+  /** Gone for good, by `trashKey`. */
+  | { purge: string }
+  | { ratingA: number }
+
+/** When and by whom the changes are made. */
+export interface ChangeContext {
+  now?: number
+  by?: string
+}
 
 // a stored document may not exceed 1 MiB; measured as JSON, which runs larger than what is stored
 export const MAX_PLAN_BYTES = 800_000
+export const TRASH_DAYS = 30
+export const TRASH_MS = TRASH_DAYS * 24 * 60 * 60_000
+export const MAX_TRASH = 200
 
-export const emptyPlan = (sectorId: string): BackupPlan => ({ sectorId, ratingA: DEFAULT_RATING_A, cases: [] })
+export const emptyPlan = (sectorId: string): BackupPlan => ({ sectorId, ratingA: DEFAULT_RATING_A, cases: [], trash: [] })
+
+/** A case may be deleted, written again and deleted again: the moment tells the copies apart. */
+export const trashKey = (caseId: string, deletedAt: number) => `${caseId}@${deletedAt}`
+export const keyOfTrashed = (item: TrashedCase) => trashKey(item.case.id, item.deletedAt)
 
 const positive = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
@@ -60,24 +91,67 @@ export function caseOf(raw: unknown): BackupCase | null {
   }
 }
 
-export function planOf(sectorId: string, data: Record<string, unknown> | undefined): BackupPlan {
-  const cases = Array.isArray(data?.cases) ? data.cases.flatMap((raw) => caseOf(raw) ?? []) : []
-  return { sectorId, ratingA: positive(data?.ratingA) ?? DEFAULT_RATING_A, cases }
+function trashedOf(raw: unknown): TrashedCase | null {
+  const { case: kept, deletedAt, deletedBy } = (raw ?? {}) as Record<string, unknown>
+  const saved = caseOf(kept)
+  const at = positive(deletedAt)
+  return saved && at ? { case: saved, deletedAt: at, ...(text(deletedBy) && { deletedBy: text(deletedBy) }) } : null
 }
 
-/** The plan after the changes, applied in order; a case saved again replaces itself in place. */
-export function applyPlanChanges(plan: BackupPlan, changes: PlanChange[]): BackupPlan {
+export function planOf(sectorId: string, data: Record<string, unknown> | undefined): BackupPlan {
+  const cases = Array.isArray(data?.cases) ? data.cases.flatMap((raw) => caseOf(raw) ?? []) : []
+  const trash = Array.isArray(data?.trash) ? data.trash.flatMap((raw) => trashedOf(raw) ?? []) : []
+  return { sectorId, ratingA: positive(data?.ratingA) ?? DEFAULT_RATING_A, cases, trash }
+}
+
+/** What the trash keeps: thirty days, and no more than it has room for — the oldest go first. */
+export const tidyTrash = (trash: TrashedCase[], now: number): TrashedCase[] =>
+  [...trash]
+    .filter((item) => now - item.deletedAt < TRASH_MS)
+    .sort((a, b) => a.deletedAt - b.deletedAt)
+    .slice(-MAX_TRASH)
+
+/**
+ * The plan after the changes, applied in order; a case saved again replaces
+ * itself in place. Nothing is deleted outright: a removed case waits in the trash.
+ */
+export function applyPlanChanges(plan: BackupPlan, changes: PlanChange[], { now = Date.now(), by }: ChangeContext = {}): BackupPlan {
   let { ratingA, cases } = plan
+  let trash = plan.trash ?? []
+  const discard = (kept: BackupCase, at: number) => {
+    trash = [...trash, { case: kept, deletedAt: at, ...(by && { deletedBy: by }) }]
+  }
   for (const change of changes) {
     if ('ratingA' in change) ratingA = positive(change.ratingA) ?? ratingA
-    else if ('remove' in change) cases = cases.filter((c) => c.id !== change.remove)
+    else if ('remove' in change) {
+      const gone = cases.find((c) => c.id === change.remove)
+      if (!gone) continue
+      cases = cases.filter((c) => c !== gone)
+      discard(gone, change.at ?? now)
+    } else if ('restore' in change) {
+      const back = trash.find((item) => keyOfTrashed(item) === change.restore)
+      if (!back) continue
+      trash = trash.filter((item) => item !== back)
+      const live = cases.find((c) => c.id === back.case.id)
+      if (live) discard(live, now)
+      cases = live ? cases.map((c) => (c === live ? back.case : c)) : [...cases, back.case]
+    } else if ('purge' in change) trash = trash.filter((item) => keyOfTrashed(item) !== change.purge)
     else {
       const saved = caseOf(change.upsert)
       if (!saved) continue
-      cases = cases.some((c) => c.id === saved.id) ? cases.map((c) => (c.id === saved.id ? saved : c)) : [...cases, saved]
+      const before = cases.find((c) => c.id === saved.id)
+      if (before && change.keepReplaced && JSON.stringify(before) !== JSON.stringify(saved)) discard(before, now)
+      cases = before ? cases.map((c) => (c === before ? saved : c)) : [...cases, saved]
     }
   }
-  return { sectorId: plan.sectorId, ratingA, cases }
+  return { sectorId: plan.sectorId, ratingA, cases, trash: tidyTrash(trash, now) }
 }
 
 export const fitsOneDocument = (plan: BackupPlan) => new TextEncoder().encode(JSON.stringify(plan)).length <= MAX_PLAN_BYTES
+
+/** The trash never costs the sector a plan: when the document runs out of room, its oldest items leave first. */
+export function fitPlan(plan: BackupPlan): BackupPlan {
+  let fitted = plan
+  while (fitted.trash.length > 0 && !fitsOneDocument(fitted)) fitted = { ...fitted, trash: fitted.trash.slice(Math.ceil(fitted.trash.length / 4)) }
+  return fitted
+}

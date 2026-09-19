@@ -11,6 +11,9 @@ export interface MapColors {
   importedLabel: string
   /** A station that can be clicked into the plan being written; `markerStroke` is its rim. */
   pickable: string
+  /** Every station of the sector, as a quiet square under the plans, and the number beside it. */
+  baseStation: string
+  baseLabel: string
 }
 
 const COLORS: Record<Theme, MapColors> = {
@@ -21,6 +24,8 @@ const COLORS: Record<Theme, MapColors> = {
     selection: '#0a2340',
     importedLabel: '#0a2340',
     pickable: '#0878c9',
+    baseStation: '#7c8da1',
+    baseLabel: '#46586d',
   },
   // on the inverted basemap: a navy rim separates the markers
   dark: {
@@ -29,6 +34,8 @@ const COLORS: Record<Theme, MapColors> = {
     selection: '#ffffff',
     importedLabel: '#eaf5ff',
     pickable: '#5fe6f0',
+    baseStation: '#6f86a0',
+    baseLabel: '#b4c5d8',
   },
 }
 

@@ -1,5 +1,5 @@
 import L from 'leaflet'
-import type { StationPoint } from '../backup/directory'
+import { placeKey, type StationPoint } from '../backup/directory'
 import type { LatLng } from '../types'
 import { PLAN_PANE } from './planLinks'
 
@@ -19,7 +19,7 @@ export interface PickLayer {
   remove: () => void
 }
 
-export const pointKey = (point: { no: string; at: LatLng }) => `${point.no}@${point.at.lng},${point.at.lat}`
+export const pointKey = placeKey
 
 const SQUARE: L.CircleMarkerOptions = { radius: 4.75, weight: 1.5, opacity: 1, fillOpacity: 0.95 }
 const HOVER_WEIGHT = 3

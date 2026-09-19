@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BackupPlan } from '../../services/backupPlanDoc'
-import { deleteBackupCase, loadBackupPlan, saveBackupCase, saveBackupCases, setDefaultRating, type LoadedPlan } from '../../services/backupPlans'
+import { deleteBackupCase, loadBackupPlan, purgeBackupCase, restoreBackupCase, saveBackupCase, saveBackupCases, setDefaultRating, type LoadedPlan } from '../../services/backupPlans'
 import type { BackupCase } from './backup/model'
 
-/** Where the plans are kept. The page uses the database; anything with the same five functions will do. */
+/** Where the plans are kept. The page uses the database; anything with the same functions will do. */
 export interface PlanStore {
   load: (sectorId: string) => Promise<LoadedPlan | null>
   saveCase: (sectorId: string, saved: BackupCase) => Promise<BackupPlan>
   saveCases: (sectorId: string, saved: BackupCase[]) => Promise<BackupPlan>
-  deleteCase: (sectorId: string, caseId: string) => Promise<BackupPlan>
+  /** Into the trash; `at` is the moment of deletion, which names the trashed case. */
+  deleteCase: (sectorId: string, caseId: string, at: number) => Promise<BackupPlan>
+  restoreCase: (sectorId: string, key: string) => Promise<BackupPlan>
+  purgeCase: (sectorId: string, key: string) => Promise<BackupPlan>
   setRating: (sectorId: string, ratingA: number) => Promise<BackupPlan>
 }
 
@@ -17,6 +20,8 @@ const database: PlanStore = {
   saveCase: saveBackupCase,
   saveCases: saveBackupCases,
   deleteCase: deleteBackupCase,
+  restoreCase: restoreBackupCase,
+  purgeCase: purgeBackupCase,
   setRating: setDefaultRating,
 }
 
@@ -29,7 +34,11 @@ export interface BackupPlans {
   /** These reject when the change could not be written. */
   save: (saved: BackupCase) => Promise<void>
   saveMany: (saved: BackupCase[]) => Promise<void>
-  remove: (caseId: string) => Promise<void>
+  /** Moves the case to the trash, where `trashKey(caseId, at)` finds it. */
+  remove: (caseId: string, at: number) => Promise<void>
+  /** By `trashKey`: back among the plans, or gone for good. */
+  restore: (key: string) => Promise<void>
+  purge: (key: string) => Promise<void>
   setRating: (ratingA: number) => Promise<void>
 }
 
@@ -85,7 +94,9 @@ export function useBackupPlans(
       notice: current?.result?.notice,
       save: (saved) => write((id) => store.saveCase(id, saved)),
       saveMany: (saved) => write((id) => store.saveCases(id, saved)),
-      remove: (caseId) => write((id) => store.deleteCase(id, caseId)),
+      remove: (caseId, at) => write((id) => store.deleteCase(id, caseId, at)),
+      restore: (key) => write((id) => store.restoreCase(id, key)),
+      purge: (key) => write((id) => store.purgeCase(id, key)),
       setRating: (ratingA) => write((id) => store.setRating(id, ratingA)),
     }),
     [wanted, current, write, store],

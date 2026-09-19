@@ -3367,6 +3367,11 @@ h3 > .rc-demo-chip {
   .rc-console:has(.rc-plans.is-picking) {
     padding-bottom: 150px;
   }
+
+  /* the three steps and the search make the bar taller */
+  .rc-console:has(.rc-plans.is-picking .rc-steps) {
+    padding-bottom: 250px;
+  }
 }
 
 /* the form, while its stations are clicked on the map: a slim bar where the panel was */
