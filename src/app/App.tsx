@@ -1,10 +1,11 @@
 import { lazy, Suspense } from 'react'
 import { HomePage } from '../features/home/HomePage'
 
-// Loaded on demand: the dashboard brings Leaflet and Firestore with it, and the
-// landing page should not pay for them.
-const RestorationPage = lazy(() =>
-  import('../features/restoration/RestorationPage').then((m) => ({ default: m.RestorationPage })),
+// Loaded on demand, so the landing page does not pay for the sign-in code. The
+// gate is all this address gives anybody: the dashboard behind it is private,
+// and is only downloaded once the gate has let somebody through.
+const RestorationGate = lazy(() =>
+  import('../features/restoration/RestorationGate').then((m) => ({ default: m.RestorationGate })),
 )
 
 // Two pages do not justify a router dependency; netlify.toml already serves
@@ -13,7 +14,7 @@ function App() {
   if (location.pathname.startsWith('/restoration'))
     return (
       <Suspense fallback={null}>
-        <RestorationPage />
+        <RestorationGate />
       </Suspense>
     )
 

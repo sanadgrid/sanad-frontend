@@ -9,9 +9,11 @@ import {
 } from 'firebase/firestore'
 import { demoNetwork } from '../features/restoration/demoData'
 import type { Feeder, LatLng, Network, Sector, Substation, Tie, Visibility } from '../features/restoration/types'
-import { db, isFirebaseConfigured } from '../lib/firebase'
+import { isFirebaseConfigured } from '../lib/firebase'
+import { db } from '../lib/firestore'
+import type { Access } from './access'
 import { currentUid, isCurrentUserAdmin } from './auth'
-import { cache, networkKey, scopeOf, sectorsKey } from './cache'
+import { cache, networkKey, sectorsKey } from './cache'
 import { bundlePartId, joinBundle, mergeNetworks, partitionByVisibility, splitBundle, type BundlePart } from './networkBundle'
 import { countReads, isDenied, isUnreachable, serverDocs, shared, withTimeout } from './reads'
 import { commit, WRITE_OVERHEAD_BYTES, type Write } from './writes'
@@ -29,6 +31,12 @@ export interface LoadedNetwork {
    */
   notice?: 'stale' | 'unavailable'
 }
+
+/**
+ * `denied` — the database refused this user, or nobody is signed in. Whatever
+ * let them in no longer holds, and they are shown nothing: not even the demo.
+ */
+export type LoadResult = LoadedNetwork | 'denied'
 
 const BUNDLES = 'networkBundles'
 const VISIBILITIES: Visibility[] = ['public', 'restricted']
@@ -51,39 +59,29 @@ const live = (network: Network): LoadedNetwork => ({ network, source: 'firestore
 const toLatLng = (point: GeoPoint): LatLng => ({ lat: point.latitude, lng: point.longitude })
 const toGeoPoint = ({ lat, lng }: LatLng) => new GeoPoint(lat, lng)
 
-// Matches the network rules in the backend repo: a visitor may only read public
-// documents, and a query that could return anything else is rejected as a whole —
-// so the visibility filter is part of the query, not applied afterwards.
-const visibilityFilter = (publicOnly: boolean) => (publicOnly ? [where('visibility', '==', 'public')] : [])
-
 /**
  * The parts of one bundle — or only its first part, which carries the version
  * and, for all but a very large sector, the whole network. A query rather than
  * a read by id: the rules refuse to look up a document that does not exist, and
- * "refused" would hide "not published yet".
+ * "refused" would hide "not published yet". The rules answer an admin or a
+ * member of the sector, which is why `sectorId` is part of the query.
  */
 async function readParts(sectorId: string, visibility: Visibility, firstOnly: boolean): Promise<BundlePart[]> {
   const filters = [where('sectorId', '==', sectorId), where('visibility', '==', visibility)]
-  try {
-    const snap = await serverDocs(BUNDLES, query(collection(db, BUNDLES), ...filters, ...(firstOnly ? [where('index', '==', 0)] : [])))
-    return snap.docs.map((d) => {
-      const { index, count, version, payload } = d.data()
-      return { index, count, version, payload }
-    })
-  } catch (error) {
-    // signed in, but not a member of this sector: to them it has no restricted bundle
-    if (visibility === 'restricted' && isDenied(error)) return []
-    throw error
-  }
+  const snap = await serverDocs(BUNDLES, query(collection(db, BUNDLES), ...filters, ...(firstOnly ? [where('index', '==', 0)] : [])))
+  return snap.docs.map((d) => {
+    const { index, count, version, payload } = d.data()
+    return { index, count, version, payload }
+  })
 }
 
 /**
- * The published network as this user may see it; `null` when nothing is
- * published. With `known` versions it first asks whether anything changed —
- * one document per bundle — and answers `unchanged` without reading further.
+ * The published network — the demo bundle and the real one, merged; `null` when
+ * nothing is published. With `known` versions it first asks whether anything
+ * changed — one document per bundle — and answers `unchanged` without reading further.
  */
-async function readBundles(sectorId: string, signedIn: boolean, known: Versions | null): Promise<CachedNetwork | 'unchanged' | null> {
-  const scopes = signedIn ? VISIBILITIES : VISIBILITIES.slice(0, 1)
+async function readBundles(sectorId: string, known: Versions | null): Promise<CachedNetwork | 'unchanged' | null> {
+  const scopes = VISIBILITIES
   const firsts = known ? await Promise.all(scopes.map((v) => readParts(sectorId, v, true))) : null
   if (known && firsts?.every((parts, i) => (parts[0]?.version ?? null) === known[scopes[i]])) return 'unchanged'
 
@@ -161,10 +159,8 @@ async function writeBundles(network: Network, whole: boolean): Promise<Versions>
 
 // what was saved for this sector no longer matches the database
 function forgetSector(sectorId: string) {
-  for (const scope of ['public', 'member'] as const) {
-    cache.remove(networkKey(sectorId, scope))
-    cache.remove(sectorsKey(scope))
-  }
+  cache.remove(networkKey(sectorId))
+  cache.remove(sectorsKey())
 }
 
 /**
@@ -194,13 +190,13 @@ async function bootstrap(sectorId: string, uid: string, key: string): Promise<Ne
 
 async function refresh(
   sectorId: string,
-  uid: string | null,
+  uid: string,
   key: string,
   saved: CachedNetwork | null,
   shown: LoadedNetwork | null,
-): Promise<LoadedNetwork> {
+): Promise<LoadResult> {
   try {
-    const read = await withTimeout(readBundles(sectorId, Boolean(uid), saved?.versions ?? null))
+    const read = await withTimeout(readBundles(sectorId, saved?.versions ?? null))
     if (read === 'unchanged' && shown) {
       cache.touch(key)
       return shown
@@ -210,10 +206,15 @@ async function refresh(
       return live(read.network)
     }
     cache.remove(key)
-    const network = uid && (await isCurrentUserAdmin()) ? await bootstrap(sectorId, uid, key) : null
+    const network = (await isCurrentUserAdmin()) ? await bootstrap(sectorId, uid, key) : null
     return network ? live(network) : demo
   } catch (error) {
     console.warn('restoration: the network could not be read —', error)
+    if (isDenied(error)) {
+      // not theirs to see any more, so the saved copy goes too
+      cache.remove(key)
+      return 'denied'
+    }
     if (shown) return isUnreachable(error) ? { ...shown, notice: 'stale' } : shown
     return isUnreachable(error) ? { ...demo, notice: 'unavailable' } : demo
   }
@@ -222,13 +223,13 @@ async function refresh(
 interface Load {
   /** What the saved copy lets the page show straight away. */
   first: LoadedNetwork | null
-  final: Promise<LoadedNetwork>
+  final: Promise<LoadResult>
 }
 
 const loads = new Map<string, Load>()
 
-function startLoad(sectorId: string, uid: string | null): Load {
-  const key = networkKey(sectorId, scopeOf(uid))
+function startLoad(sectorId: string, uid: string): Load {
+  const key = networkKey(sectorId)
   const saved = cache.get<CachedNetwork>(key, uid)
   const first = saved ? live(saved.value.network) : null
   if (saved && first && cache.isFresh(saved)) return { first, final: Promise.resolve(first) }
@@ -236,17 +237,21 @@ function startLoad(sectorId: string, uid: string | null): Load {
 }
 
 /**
- * Never throws: anything short of a complete published network yields the
- * bundled demo network. A saved copy is returned at once; when the database
- * then turns out to hold something newer — or cannot be reached — `onRefresh`
- * receives the result that replaces it.
+ * For whoever the gate let in; never throws. For them, anything short of a
+ * complete published network yields the bundled demo network — a sector that
+ * was never published has to show something for an admin to publish. A saved
+ * copy is returned at once; when the database then turns out to hold something
+ * newer — or cannot be reached, or refuses — `onRefresh` receives the result
+ * that replaces it.
  */
-export async function loadNetwork(sectorId: string, onRefresh: (result: LoadedNetwork) => void = () => {}): Promise<LoadedNetwork> {
+export async function loadNetwork(sectorId: string, onRefresh: (result: LoadResult) => void = () => {}): Promise<LoadResult> {
+  // only the test build gets this far without a project behind it (see RestorationGate.tsx)
   if (!isFirebaseConfigured) return demo
   const uid = await currentUid()
+  if (!uid) return 'denied'
 
   // one load per sector and user at a time, however many callers ask
-  const loadKey = `${sectorId}:${uid ?? ''}`
+  const loadKey = `${sectorId}:${uid}`
   let load = loads.get(loadKey)
   if (!load) {
     const started = startLoad(sectorId, uid)
@@ -265,32 +270,44 @@ export async function loadNetwork(sectorId: string, onRefresh: (result: LoadedNe
   return first
 }
 
-export async function listSectors(): Promise<SectorSummary[]> {
+// a sector the user belongs to but nobody has described yet still needs a line in the list
+const unnamed = (id: string): SectorSummary => demoSectors.find((s) => s.id === id) ?? { id, nameAr: id, nameEn: id }
+
+async function readSectors(access: Access): Promise<SectorSummary[]> {
+  const summary = (id: string, data: DocumentData): SectorSummary => ({ id, nameAr: data.nameAr, nameEn: data.nameEn })
+  if (access.role === 'admin') {
+    const snap = await serverDocs('sectors', collection(db, 'sectors'))
+    return snap.docs.map((d) => summary(d.id, d.data()))
+  }
+  // The rules refuse a member the whole collection, but answer for each sector
+  // they belong to — one read each, and the list is theirs alone.
+  const snaps = await Promise.all(access.sectors.map((id) => getDocFromServer(doc(db, 'sectors', id))))
+  countReads('sectors', snaps.length)
+  return snaps.map((snap) => (snap.exists() ? summary(snap.id, snap.data()) : unnamed(snap.id)))
+}
+
+const sameSectors = (list: SectorSummary[], ids: string[]) => list.length === ids.length && list.every((s) => ids.includes(s.id))
+
+/** The sectors this user may choose from: all of them for an admin, their own for a member. Never throws, never empty. */
+export async function listSectors(access: Access): Promise<SectorSummary[]> {
   if (!isFirebaseConfigured) return demoSectors
   const uid = await currentUid()
-  return shared(`sectors:${uid ?? ''}`, async () => {
-    const key = sectorsKey(scopeOf(uid))
-    const saved = cache.get<SectorSummary[]>(key, uid)
+  const fallback = access.role === 'admin' ? demoSectors : access.sectors.map(unnamed)
+  if (!uid) return fallback
+  return shared(`sectors:${uid}`, async () => {
+    const key = sectorsKey()
+    const found = cache.get<SectorSummary[]>(key, uid)
+    // a member whose sectors changed since the list was saved reads it again
+    const saved = found && (access.role === 'admin' || sameSectors(found.value, access.sectors)) ? found : null
     if (saved && cache.isFresh(saved)) return saved.value
-    const read = (publicOnly: boolean) => serverDocs('sectors', query(collection(db, 'sectors'), ...visibilityFilter(publicOnly)))
     try {
-      // A signed-in user who is not a member of every sector is refused the
-      // unfiltered query, but can still see what any visitor sees.
-      const snap = await withTimeout(
-        uid
-          ? read(false).catch((error) => {
-              if (isDenied(error)) return read(true)
-              throw error
-            })
-          : read(true),
-      )
-      if (snap.empty) return demoSectors
-      const list: SectorSummary[] = snap.docs.map((d) => ({ id: d.id, nameAr: d.data().nameAr, nameEn: d.data().nameEn }))
+      const list = await withTimeout(readSectors(access))
+      if (list.length === 0) return fallback
       cache.set(key, uid, list)
       return list
     } catch (error) {
       console.warn('restoration: the sectors could not be read —', error)
-      return saved?.value ?? demoSectors
+      return saved?.value ?? fallback
     }
   })
 }

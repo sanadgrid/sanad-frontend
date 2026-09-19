@@ -5,6 +5,17 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# The dashboard is private: search engines are told not to list it or follow it.
+[[headers]]
+  for = "/restoration"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/restoration/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
 # SPA fallback so client-side routes don't 404 on refresh
 [[redirects]]
   from = "/*"
