@@ -1245,6 +1245,14 @@ h1 {
   gap: 24px;
 }
 
+.footer__meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+}
+
 .footer__links a:hover {
   color: #fff;
 }

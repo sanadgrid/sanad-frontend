@@ -284,6 +284,23 @@
   color: var(--rc-text);
 }
 
+/* the release number: there for whoever looks for it, quiet for everyone else */
+.rc-topbar__version {
+  margin-inline-start: 12px;
+  color: var(--rc-muted);
+}
+
+/* slim enough not to make the line it sits in any taller */
+.rc-topbar__version .app-version {
+  padding-block: 0;
+}
+
+@media (max-width: 639.98px) {
+  .rc-topbar__version {
+    display: none;
+  }
+}
+
 .rc-topbar__tools {
   display: flex;
   align-items: center;
@@ -1221,6 +1238,12 @@
   color: var(--rc-text-strong);
 }
 
+.leaflet-popup.rc-popup .rc-popup__group {
+  display: block;
+  font-size: 11.5px;
+  color: var(--rc-muted);
+}
+
 .leaflet-popup.rc-popup p {
   margin: 4px 0 0;
   color: var(--rc-text-2);
@@ -1948,27 +1971,263 @@
   gap: 8px;
 }
 
-.rc-imported__list {
+.rc-imported .rc-search input {
+  padding-block: 7px;
+  font-size: 12.5px;
+}
+
+.rc-imported__status,
+.rc-imported__caption {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--rc-muted);
+}
+
+.rc-imported__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rc-imported ul {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
-  max-height: 264px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* the stations a search found: a short list of its own, so the layers stay in sight under it */
+.rc-imported__hits {
+  display: grid;
+  gap: 4px;
+}
+
+.rc-imported__hits ul {
+  max-height: 190px;
+  padding: 4px;
+  border: 1px solid var(--rc-line);
+  border-radius: 10px;
+  background: var(--rc-inset);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--rc-scrollbar) transparent;
 }
 
-.rc-imported__list li {
+.rc-imported__list {
+  /* room for an opened layer; the drawer scrolls the rest */
+  max-height: min(440px, 60dvh);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rc-scrollbar) transparent;
+}
+
+.rc-imported__layer {
+  padding-block: 3px;
+  border-radius: 8px;
+}
+
+.rc-imported__layer.is-open {
+  background: var(--rc-fill);
+}
+
+.rc-imported__row {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 30px;
+  min-height: 28px;
 }
 
-.rc-imported__list .rc-check {
+.rc-imported__row .rc-check {
   flex: 1;
+}
+
+.rc-imported__expand {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--rc-muted);
+  cursor: pointer;
+}
+
+.rc-imported__expand:hover,
+.rc-contents__head:hover {
+  color: var(--rc-text-strong);
+}
+
+/* closed, the arrow points the way the text runs; open, it points down */
+.rc-imported__expand svg,
+.rc-contents__head svg {
+  transform: rotate(90deg);
+  transition: transform 0.15s;
+}
+
+.rc-imported__expand[aria-expanded='true'] svg,
+.rc-contents__head[aria-expanded='true'] svg {
+  transform: none;
+}
+
+.rc-imported__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  /* under the name: past the arrow, the box and the colour */
+  padding-inline-start: 62px;
+  font-size: 11.5px;
+  color: var(--rc-faint);
+}
+
+.rc-imported__chip {
+  padding: 0 7px;
+  border: 1px solid var(--rc-accent-line);
+  border-radius: 99px;
+  background: var(--rc-accent-soft);
+  color: var(--rc-accent-strong);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---------- what an imported layer holds ---------- */
+.rc-contents {
+  display: grid;
+  gap: 2px;
+  margin: 6px 6px 4px;
+  padding-inline-start: 10px;
+  border-inline-start: 2px solid var(--rc-line-strong);
+}
+
+.rc-contents__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 26px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--rc-text-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.rc-contents__head bdi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-contents__head .num {
+  flex: none;
+  font-weight: 500;
+  color: var(--rc-faint);
+}
+
+.rc-contents__group > ul {
+  padding-inline-start: 6px;
+}
+
+.rc-contents__item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 26px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--rc-text-2);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.rc-contents__item:hover {
+  background: var(--rc-raised-hover);
+  color: var(--rc-text-strong);
+}
+
+.rc-contents__item[aria-current='true'] {
+  background: var(--rc-accent-soft);
+  color: var(--rc-accent-strong);
+  font-weight: 600;
+}
+
+.rc-contents__item bdi {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-contents__item bdi:last-child {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.rc-contents__item .rc-contents__folder {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--rc-faint);
+}
+
+/* the same marks the map draws: a square for a station, a dot, a stroke, an outline */
+.rc-contents__glyph {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+/* a station carries its layer's colour, as it does on the map */
+.rc-contents__glyph--s {
+  border-radius: 2px;
+  background: var(--rc-swatch, currentColor);
+  opacity: 1;
+}
+
+.rc[data-theme='dark'] .rc-contents__glyph--s {
+  background: var(--rc-swatch-dark, currentColor);
+}
+
+.rc-contents__glyph--l {
+  height: 2px;
+  border-radius: 1px;
+}
+
+.rc-contents__glyph--g {
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  background: none;
+}
+
+.rc-contents__note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 2px;
+  padding-inline-start: 62px;
+  font-size: 11.5px;
+  color: var(--rc-muted);
+}
+
+.rc-contents__note--failed {
+  color: var(--rc-bad-text);
 }
 
 .rc-imported__swatch {
@@ -1995,7 +2254,10 @@
 }
 
 .rc-imported__list li.rc-imported__confirm {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 6px;
   padding: 6px 8px;
   border-radius: 8px;
   background: var(--rc-bad-soft);

@@ -1,6 +1,16 @@
 import L from 'leaflet'
-import type { Bbox } from '../import/types'
+import type { Bbox, Position } from '../import/types'
 import type { LatLng } from '../types'
+
+/** Something in an imported layer to bring into view, with what its popup says. */
+export interface Place {
+  at: Position
+  /** What to frame, for a line or an area; a point is flown to. */
+  bbox?: Bbox
+  text: { n: string; g?: string; d?: string }
+  /** Found through the index, which knows the name only: the popup is completed once the layer has arrived. */
+  partial?: boolean
+}
 
 /** What the page may ask of the map. A new object asks again, even for the same thing. */
 export type MapView =
@@ -9,12 +19,15 @@ export type MapView =
   | { kind: 'zoom'; by: 1 | -1 }
   /** `whenCovered`: only if a panel hides the station — a click on the map itself should not move it. */
   | { kind: 'station'; id: string; whenCovered?: boolean }
+  | { kind: 'place'; layerId: string; place: Place }
 
 // kept free around what is fitted, so a marker and its label never touch a panel
 const MARGIN = 44
 const FIT_MAX_ZOOM = 14
 // a clear area smaller than this is not worth aiming at (it is being laid out, or the screen is tiny)
 const MIN_CLEAR = 160
+// close enough to tell a station from its neighbours and to read its number
+const PLACE_ZOOM = 15
 
 interface Padding {
   paddingTopLeft: L.PointTuple
@@ -47,6 +60,16 @@ export function fitBbox(map: L.Map, [west, south, east, north]: Bbox, clear: HTM
     ],
     { ...clearPadding(map, clear), maxZoom: 15 },
   )
+}
+
+/** Fly to a point so that it lands in the middle of the clear area, close up. */
+export function flyToPoint(map: L.Map, [lng, lat]: Position, clear: HTMLElement | null) {
+  const { paddingTopLeft: start, paddingBottomRight: end } = clearPadding(map, clear)
+  const zoom = Math.max(map.getZoom(), PLACE_ZOOM)
+  // the middle of the clear area, measured from the middle of the map
+  const shift = L.point((start[0] - end[0]) / 2, (start[1] - end[1]) / 2)
+  const centre = map.unproject(map.project([lat, lng], zoom).subtract(shift), zoom)
+  map.flyTo(centre, zoom, { duration: 0.8 })
 }
 
 /** Bring a station to the middle of the clear area. */

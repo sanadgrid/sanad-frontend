@@ -1,3 +1,4 @@
+import { AppVersion } from '../../../components/AppVersion'
 import { Icon } from '../../../components/Icon'
 import { Logo } from '../../../components/Logo'
 import type { AuthUser } from '../../../services/auth'
@@ -48,6 +49,9 @@ export function TopBar({
       </a>
       <p className="rc-topbar__unit">
         التخطيط التشغيلي <span aria-hidden="true">·</span> <b>قدرة استعادة الخدمة</b>
+        <span className="rc-topbar__version">
+          <AppVersion />
+        </span>
       </p>
 
       <div className="rc-topbar__tools">

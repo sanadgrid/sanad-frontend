@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { AppVersion } from '../../components/AppVersion'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
 import { navLinks } from './content'
@@ -88,8 +89,11 @@ function Footer() {
             </a>
           ))}
         </div>
-        <span dir="ltr" lang="en">
-          © {new Date().getFullYear()} SanadGrid · Saudi Arabia
+        <span className="footer__meta">
+          <span dir="ltr" lang="en">
+            © {new Date().getFullYear()} SanadGrid · Saudi Arabia
+          </span>
+          <AppVersion />
         </span>
       </div>
     </footer>

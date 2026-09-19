@@ -38,24 +38,19 @@ function collect(container: Element, sub: string[], found: RawPlacemark[]) {
 }
 
 function buildLayer(name: string, path: string, placemarks: RawPlacemark[]): ParsedLayer {
-  const uses = new Map<string, number>()
-  for (const p of placemarks) uses.set(p.name, (uses.get(p.name) ?? 0) + 1)
-
   const counts: LayerCounts = { point: 0, line: 0, polygon: 0 }
   let bbox: Bbox | null = null
-  const features = placemarks.flatMap((p) => {
-    // the sub-folder is only spelled out where the name alone would be ambiguous
-    const shared = (uses.get(p.name) ?? 0) > 1 || !p.name
-    const name = shared && p.sub ? [p.sub, p.name].filter(Boolean).join(PATH_SEPARATOR) : p.name
-    return p.shapes.map((shape) => {
+  // the name stays as it is in the file; the sub-folder travels beside it and tells namesakes apart
+  const features = placemarks.flatMap((p) =>
+    p.shapes.map((shape) => {
       counts[COUNT_KEY[shape.t]] += 1
       for (const [lng, lat] of positionsOf(shape))
         bbox = bbox
           ? [Math.min(bbox[0], lng), Math.min(bbox[1], lat), Math.max(bbox[2], lng), Math.max(bbox[3], lat)]
           : [lng, lat, lng, lat]
-      return toFeature(shape, name, p.description)
-    })
-  })
+      return toFeature(shape, p.name, p.description, p.sub)
+    }),
+  )
   return { name, path, placemarks: placemarks.length, counts, bbox, features }
 }
 

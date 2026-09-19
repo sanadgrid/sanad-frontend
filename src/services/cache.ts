@@ -118,6 +118,8 @@ export const networkKey = (sectorId: string, scope: CacheScope) => `${CACHE_PREF
 export const sectorsKey = (scope: CacheScope) => `${CACHE_PREFIX}sectors.${scope}`
 // imported layers are only ever listed for a signed-in user
 export const layersKey = (sectorId: string) => `${CACHE_PREFIX}layers.${sectorId}`
+// station lists worked out so far for older layers: a run that was cut short resumes instead of reading again
+export const stationsProgressKey = (sectorId: string) => `${layersKey(sectorId)}.stations`
 
 const isMemberKey = (key: string) =>
   key.startsWith(CACHE_PREFIX) && (key.endsWith('.member') || key.startsWith(`${CACHE_PREFIX}layers.`))

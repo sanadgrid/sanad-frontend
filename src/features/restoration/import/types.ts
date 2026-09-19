@@ -3,11 +3,18 @@
 
 export type Position = [lng: number, lat: number]
 
+interface FeatureText {
+  n: string
+  d?: string
+  /** Sub-folders between the layer's folder and the placemark: "11kV / Phase 2". Absent in older imports. */
+  g?: string
+}
+
 export type CompactFeature =
-  | { t: 'p'; n: string; d?: string; c: Position }
-  | { t: 'l'; n: string; d?: string; c: Position[] }
+  | ({ t: 'p'; c: Position } & FeatureText)
+  | ({ t: 'l'; c: Position[] } & FeatureText)
   /** Rings, outer first. */
-  | { t: 'g'; n: string; d?: string; c: Position[][] }
+  | ({ t: 'g'; c: Position[][] } & FeatureText)
 
 export type Bbox = [west: number, south: number, east: number, north: number]
 

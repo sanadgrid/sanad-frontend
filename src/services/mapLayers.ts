@@ -1,12 +1,13 @@
 import { collection, doc, query, serverTimestamp, setDoc, Timestamp, where, type DocumentData } from 'firebase/firestore'
 import { byteLength, chunkFeatures } from '../features/restoration/import/chunks'
 import { layerIdOf } from '../features/restoration/import/layerId'
+import { stationDirectory, type StationEntry } from '../features/restoration/import/stations'
 import type { Bbox, CompactFeature, LayerCounts } from '../features/restoration/import/types'
 import type { Visibility } from '../features/restoration/types'
 import { db, isFirebaseConfigured } from '../lib/firebase'
 import { currentUid, isCurrentUserAdmin } from './auth'
-import { cache, layersKey } from './cache'
-import { applyIndexChanges, sortLayers, type IndexChange } from './layerIndex'
+import { cache, layersKey, stationsProgressKey } from './cache'
+import { applyIndexChanges, fitIndex, sortLayers, type IndexChange } from './layerIndex'
 import { isDenied, isUnreachable, serverDocs, shared, withTimeout } from './reads'
 import { commit, WRITE_OVERHEAD_BYTES, type Write } from './writes'
 
@@ -25,6 +26,8 @@ export interface MapLayer {
   bbox: Bbox
   chunks: number
   style: { color: string }
+  /** Its station points, so one can be found without reading the layer. Absent until worked out for an older import. */
+  stations?: StationEntry[]
 }
 
 export interface LayerUpload {
@@ -87,7 +90,7 @@ let lastUpdate: Promise<unknown> = Promise.resolve()
 async function writeIndex(sectorId: string, changes: IndexChange[]): Promise<MapLayer[]> {
   // an index that does not exist yet starts from the layers themselves
   const current = (await readIndex(sectorId)) ?? (await readDescriptors(sectorId))
-  const layers = applyIndexChanges(current, changes)
+  const layers = fitIndex(applyIndexChanges(current, changes))
   // through JSON: a field that is `undefined` would be refused
   const plain = JSON.parse(JSON.stringify(layers)) as MapLayer[]
   await setDoc(doc(db, INDEX, sectorId), { sectorId, visibility: RESTRICTED, layers: plain, updatedAt: serverTimestamp() })
@@ -165,6 +168,83 @@ export function loadLayerFeatures(sectorId: string, layerId: string): Promise<Co
   return pending
 }
 
+// one attempt per sector and page: a run that failed is not repeated until the page is opened again
+const directoryRuns = new Map<string, DirectoryRun>()
+const PARALLEL_DIRECTORY_READS = 3
+
+type Progress = (done: number, total: number) => void
+
+interface DirectoryRun {
+  finished: Promise<MapLayer[] | null>
+  /** Everyone who asked while it runs is told how far it is. */
+  watchers: Set<Progress>
+  progress: [done: number, total: number] | null
+}
+
+async function buildStationDirectories(sectorId: string, uid: string, layers: MapLayer[], onProgress: Progress): Promise<MapLayer[]> {
+  const queue = layers.filter((layer) => !layer.stations)
+  const total = queue.length
+  const key = stationsProgressKey(sectorId)
+  const found = cache.get<Record<string, StationEntry[]>>(key, uid)?.value ?? {}
+  let done = 0
+  const worker = async () => {
+    for (let layer = queue.shift(); layer; layer = queue.shift()) {
+      // read for the list only: holding every layer of a sector in memory is not worth a later tick
+      found[layer.id] ??= stationDirectory(await (features.get(layer.id) ?? readFeatures(sectorId, layer.id)))
+      // nothing is left on the device of someone who signed out meanwhile
+      if ((await currentUid()) !== uid) throw new Error('map layers: signed out while the station lists were read')
+      cache.set(key, uid, found)
+      onProgress((done += 1), total)
+    }
+  }
+  onProgress(0, total)
+  await Promise.all(Array.from({ length: PARALLEL_DIRECTORY_READS }, worker))
+  // written once, at the end: until then the index is untouched, and what was found waits in the browser
+  const updated = await updateIndex(sectorId, [{ stations: found }])
+  cache.remove(key)
+  return updated
+}
+
+/**
+ * Layers imported before the index listed stations get their lists worked out
+ * once, by the first admin who opens the page: every chunk of those layers is
+ * read, and the index is written a single time. Never throws; `null` when
+ * nothing was written (not an admin, or the run was cut short — it resumes on
+ * the next visit from what it had found).
+ */
+export async function backfillStationDirectories(
+  sectorId: string,
+  layers: MapLayer[],
+  onProgress: Progress = () => {},
+): Promise<MapLayer[] | null> {
+  if (!isFirebaseConfigured || layers.every((layer) => layer.stations)) return null
+  const uid = await currentUid()
+  // only an admin can write the index
+  if (!uid || !(await isCurrentUserAdmin())) return null
+  const running = directoryRuns.get(sectorId)
+  if (running) {
+    running.watchers.add(onProgress)
+    if (running.progress) onProgress(...running.progress)
+    return running.finished
+  }
+  const run: DirectoryRun = { finished: Promise.resolve(null), watchers: new Set([onProgress]), progress: null }
+  const report: Progress = (done, total) => {
+    run.progress = [done, total]
+    for (const watcher of run.watchers) watcher(done, total)
+  }
+  run.finished = buildStationDirectories(sectorId, uid, layers, report)
+    .catch((error) => {
+      console.warn('map layers: the station lists could not be completed —', error)
+      return null
+    })
+    .finally(() => {
+      run.watchers.clear()
+      run.progress = null
+    })
+  directoryRuns.set(sectorId, run)
+  return run.finished
+}
+
 const removalsOf = async (sectorId: string, layerId: string): Promise<Write[]> =>
   (await chunksOf(sectorId, layerId)).docs.map((d) => ({ ref: d.ref, data: null, bytes: WRITE_OVERHEAD_BYTES }))
 
@@ -184,7 +264,8 @@ export async function saveMapLayer(
   const scope = { sectorId, visibility: RESTRICTED }
   const chunks = chunkFeatures(layer.features)
   const { name, path, sourceFile, counts, bbox, color } = layer
-  const descriptor = { ...scope, name, path, sourceFile, counts, bbox, chunks: chunks.length, style: { color } }
+  const stations = stationDirectory(layer.features)
+  const descriptor = { ...scope, name, path, sourceFile, counts, bbox, chunks: chunks.length, style: { color }, stations }
 
   const removals = await removalsOf(sectorId, layerId)
   const additions: Write[] = [

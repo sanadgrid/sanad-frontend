@@ -62,8 +62,9 @@ export function shapesOf(geometry: Element): Shape[] {
   }
 }
 
-export function toFeature(shape: Shape, name: string, description: string): CompactFeature {
-  return description ? { ...shape, n: name, d: description } : { ...shape, n: name }
+/** Empty texts are left out: every key is paid for in each of thousands of features. */
+export function toFeature(shape: Shape, name: string, description: string, group = ''): CompactFeature {
+  return { ...shape, n: name, ...(description && { d: description }), ...(group && { g: group }) }
 }
 
 /** Every position of a feature, whatever its type. */

@@ -7,7 +7,7 @@ import { ImportedLayersList } from './components/ImportedLayersList'
 import { KpiCards } from './components/KpiCards'
 import { MapControls } from './components/MapControls'
 import { MapLegend } from './components/MapLegend'
-import type { MapView } from './components/mapView'
+import type { MapView, Place } from './components/mapView'
 import { Methodology } from './components/Methodology'
 import { NetworkMap } from './components/NetworkMap'
 import type { MapStation, MapTie } from './components/networkLayers'
@@ -129,6 +129,14 @@ export function Dashboard({ network, theme, imported, isAdmin, busy, onDeleteLay
     setView({ kind: 'station', id, whenCovered: from === 'map' })
   }
 
+  // A station or a shape picked in the list of an imported layer: the layer is
+  // switched on if it was not, and on a phone the sheet gives way to the map.
+  const pointAt = (layerId: string, place: Place) => {
+    if (!imported.active.has(layerId)) imported.toggle(layerId, true)
+    setView({ kind: 'place', layerId, place })
+    if (!wide) setFiltersOpen(false)
+  }
+
   // On a wide screen the panel is the selection. On a phone it is a sheet over
   // the map: closing it keeps the station marked, and a button brings it back.
   const closeDetail = () => {
@@ -184,6 +192,7 @@ export function Dashboard({ network, theme, imported, isAdmin, busy, onDeleteLay
                 canDelete={isAdmin}
                 busy={busy}
                 onZoom={(bbox) => setView({ kind: 'bbox', bbox })}
+                onPoint={pointAt}
                 onDelete={onDeleteLayer}
               />
             )

@@ -8,8 +8,18 @@ import { mapTiles } from '../mapTiles'
 import type { LatLng } from '../types'
 import type { VisibleLayer } from '../useMapLayers'
 import type { Theme } from '../useTheme'
-import { describeOnMap, drawImportedLayer, IMPORTED_PANE, IMPORTED_PANE_Z, paintImportedLayer } from './importedLayer'
-import { fitBbox, fitPoints, followClearArea, panTo, patientFit, type MapView } from './mapView'
+import {
+  describeOnMap,
+  drawImportedLayer,
+  IMPORTED_PANE,
+  IMPORTED_PANE_Z,
+  openDetail,
+  paintImportedLayer,
+  settleStations,
+  setDetail,
+  type DrawnImportedLayer,
+} from './importedLayer'
+import { fitBbox, fitPoints, flyToPoint, followClearArea, panTo, patientFit, type MapView, type Place } from './mapView'
 import { drawNetwork, LABEL_PANE, LABEL_PANE_Z, type MapStation, type MapTie, type Themed } from './networkLayers'
 
 interface NetworkMapProps {
@@ -29,11 +39,32 @@ interface NetworkMapProps {
   onSelect: (stationId: string) => void
 }
 
-interface DrawnLayer {
-  group: L.FeatureGroup
+interface DrawnLayer extends DrawnImportedLayer {
   /** What the group was built from: a re-import brings a new array, a re-render does not. */
   features: VisibleLayer['features']
   color: string
+}
+
+/** The place the list last pointed at, and its popup. */
+interface Pointed {
+  layerId: string
+  place: Place
+  popup: L.Popup
+  /** The layer has been on the map since: when it goes, so does the popup. */
+  drawn: boolean
+}
+
+// The index knows a station by its name and place only; the rest of its popup
+// comes from the layer itself, as soon as that is on the map.
+function completeDetail(at: Pointed, features: VisibleLayer['features'] | undefined) {
+  if (!features) return
+  at.drawn = true
+  if (!at.place.partial) return
+  const { text } = at.place
+  const [lng, lat] = at.place.at
+  const found = features.find((f) => f.t === 'p' && f.c[0] === lng && f.c[1] === lat && f.n.trim() === text.n)
+  if (found) setDetail(at.popup, found)
+  at.place = { ...at.place, partial: false }
 }
 
 // from the zoom a fitted sector opens at: further out, the names pile up on each other
@@ -58,6 +89,7 @@ export function NetworkMap({
   // thousands of imported shapes are painted on one canvas instead of one SVG node each
   const canvas = useRef<L.Renderer | null>(null)
   const drawn = useRef(new Map<string, DrawnLayer>())
+  const pointed = useRef<Pointed | null>(null)
   // the latest values, for handlers and for views asked long after the markers were drawn
   const select = useRef(onSelect)
   const shown = useRef(stations)
@@ -132,6 +164,7 @@ export function NetworkMap({
       overlay.current = null
       canvas.current = null
       importedLayers.clear()
+      pointed.current = null
     }
   }, [clearArea])
 
@@ -170,23 +203,35 @@ export function NetworkMap({
     const instance = map.current
     const renderer = canvas.current
     if (!instance || !renderer) return
+    let changed = false
     for (const [id, { group, features }] of drawn.current) {
       if (imported.some((layer) => layer.id === id && layer.features === features)) continue
       group.remove()
       drawn.current.delete(id)
+      changed = true
     }
     for (const { id, features, color } of imported) {
       if (drawn.current.has(id)) continue
-      const group = drawImportedLayer(features, renderer)
-      describeOnMap(group, instance)
-      drawn.current.set(id, { group, features, color })
+      const layer = drawImportedLayer(features, renderer)
+      describeOnMap(layer.group, instance)
+      drawn.current.set(id, { ...layer, features, color })
+      changed = true
     }
-    const rim = themeColors(theme).markerStroke
-    for (const { group, color } of drawn.current.values()) {
-      paintImportedLayer(group, { color: layerColor(color, theme), rim })
+    const { markerStroke: rim, importedLabel: label } = themeColors(theme)
+    for (const layer of drawn.current.values()) {
+      paintImportedLayer(layer, { color: layerColor(layer.color, theme), rim, label })
       // added only once painted, so a layer never flashes in Leaflet's default blue
-      group.addTo(instance)
+      layer.group.addTo(instance)
     }
+    if (changed) settleStations(drawn.current.values(), renderer)
+
+    // The popup of a place found through the list: it learns its details when
+    // its layer arrives, and leaves with the layer.
+    const at = pointed.current
+    if (!at?.popup.isOpen()) return
+    const layer = imported.find(({ id }) => id === at.layerId)
+    if (!layer && at.drawn) at.popup.close()
+    completeDetail(at, layer?.features)
   }, [imported, theme])
 
   useEffect(() => {
@@ -204,7 +249,14 @@ export function NetworkMap({
     // a framed map moves itself when the panel of the clicked station opens
     if (view.kind === 'station' && view.whenCovered && framed.current) return
     const station = view.kind === 'station' && shown.current.find((s) => s.id === view.id)
-    if (view.kind === 'zoom') instance.setZoom(instance.getZoom() + view.by)
+    if (view.kind === 'place') {
+      const { place, layerId } = view
+      if (place.bbox) fitBbox(instance, place.bbox, clearArea.current)
+      else flyToPoint(instance, place.at, clearArea.current)
+      const popup = openDetail(instance, place.text, [place.at[1], place.at[0]], !place.bbox)
+      pointed.current = { layerId, place, popup, drawn: false }
+      completeDetail(pointed.current, drawn.current.get(layerId)?.features)
+    } else if (view.kind === 'zoom') instance.setZoom(instance.getZoom() + view.by)
     else if (view.kind === 'bbox') fitBbox(instance, view.bbox, clearArea.current)
     else if (!station || !panTo(instance, station.location, clearArea.current, view.whenCovered)) return
     framed.current = false
