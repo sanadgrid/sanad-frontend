@@ -1,18 +1,30 @@
 import { Icon } from '../../../components/Icon'
-import { contact } from '../content'
+import { contact, contactIntro } from '../content'
 
 export function Contact() {
   return (
-    <section className="section section--flush-top" id="contact">
+    <section className="section" id="contact">
       <div className="container contact">
         <div className="contact__intro reveal">
-          <span className="kicker">CONTACT / CONTROL SUPPORT</span>
+          <span className="kicker" dir="ltr" lang="en">
+            {contactIntro.kicker}
+          </span>
           <h2>
-            تواصل مباشر.
+            {contactIntro.titleLead}
             <br />
-            <span className="accent">ودعم أكثر كفاءة.</span>
+            <span className="accent">{contactIntro.titleAccent}</span>
           </h2>
-          <p>للاستفسار عن المنصة أو الأعمال المطروحة، تواصل مباشرة مع مسؤول دعم التحكم.</p>
+          <p className="sub">{contactIntro.text}</p>
+          <div className="actions">
+            <a className="btn btn--primary" href={`mailto:${contact.email}`}>
+              <Icon name="mail" size={18} />
+              {contactIntro.mail}
+            </a>
+            <a className="btn btn--ghost" href={contact.phoneHref}>
+              <Icon name="phone" size={18} />
+              {contactIntro.call}
+            </a>
+          </div>
         </div>
 
         <article className="profile reveal" dir="ltr" lang="en">

@@ -1,0 +1,55 @@
+/* The lockup is used by the landing page and by the dashboard's top bar, so its
+   styles travel with the component instead of living in one page's stylesheet. */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  font-family: var(--font-en);
+}
+
+.logo svg {
+  flex: none;
+  filter: drop-shadow(0 6px 16px rgba(0, 179, 198, 0.28));
+}
+
+.logo__text {
+  display: grid;
+  gap: 3px;
+  line-height: 1;
+}
+
+.logo__word {
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  color: #fff;
+}
+
+.logo__word b {
+  color: var(--cyan);
+  font-weight: 800;
+}
+
+.logo__tag {
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.logo--onLight .logo__word {
+  color: var(--ink);
+}
+
+.logo--onLight .logo__tag {
+  color: var(--ink-muted);
+}
+
+.logo__glow {
+  animation: logo-glow 3.2s ease-in-out infinite;
+}
+
+@keyframes logo-glow {
+  50% {
+    opacity: 0.45;
+  }
+}

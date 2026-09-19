@@ -20,7 +20,45 @@
   --border: #e2eaf2;
   --border-dark: rgba(140, 200, 240, 0.14);
 
+  /* light pages (the landing): ice surfaces, navy ink, text-safe accents */
+  --ice: #f5f9fd;
+  --ice-200: #eaf2fa;
+  --ice-300: #dbe7f3;
+  --ink-soft: #33496a;
+  --blue-600: #0f56c4;
+  --teal-700: #0b6f86;
+  --line: #dde7f1;
+
+  /* restoration status: fills, and the darker variants text needs on a light surface */
+  --ok: #19bd85;
+  --warn: #f1bf37;
+  --limited: #ff7f42;
+  --bad: #ef476f;
+  --ok-text: #08774f;
+  --warn-text: #8a5f00;
+  --limited-text: #b13a09;
+  --bad-text: #c81e4a;
+  --ok-soft: #e3f7ef;
+  --warn-soft: #fdf3d3;
+  --limited-soft: #ffeadf;
+  --bad-soft: #fde7ec;
+
+  /* 8px spacing scale */
+  --s1: 8px;
+  --s2: 16px;
+  --s3: 24px;
+  --s4: 32px;
+  --s5: 40px;
+  --s6: 48px;
+  --s8: 64px;
+  --s10: 80px;
+  --s12: 96px;
+
   --radius: 18px;
+  --radius-sm: 12px;
+  --shadow-sm: 0 1px 2px rgba(7, 27, 52, 0.05), 0 4px 14px rgba(7, 27, 52, 0.05);
+  --shadow-md: 0 2px 4px rgba(7, 27, 52, 0.04), 0 18px 44px rgba(7, 27, 52, 0.09);
+  --shadow-lg: 0 4px 8px rgba(7, 27, 52, 0.04), 0 36px 80px rgba(7, 27, 52, 0.14);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --font-ar: 'IBM Plex Sans Arabic', 'Inter', system-ui, 'Segoe UI', Tahoma, sans-serif;
   --font-en: 'Inter', 'IBM Plex Sans Arabic', system-ui, 'Segoe UI', sans-serif;

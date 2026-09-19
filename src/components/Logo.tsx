@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import './Logo.css'
 
 interface LogoProps {
   /** Height of the mark in px; the wordmark scales with it. */
@@ -9,7 +10,7 @@ interface LogoProps {
 }
 
 // The mark: «سند» in square Kufic — a script drawn on a grid. The baseline is the
-// transmission line and the dot of the ن is an energised node.
+// feeder and the dot of the ن is an energised node.
 // [x, y, width, height] on a 64×64 tile; pieces overlap so no seams show.
 const strokes = [
   [6.15, 42.6, 51.7, 4.7], // baseline
@@ -67,7 +68,7 @@ export function Logo({ size = 40, withWordmark = true, tone = 'onDark' }: LogoPr
             sanad<b>grid</b>
           </span>
           <span className="logo__tag" style={{ fontSize: Math.max(7, size * 0.18) }}>
-            POWER TRANSMISSION SOLUTIONS
+            POWER DISTRIBUTION SOLUTIONS
           </span>
         </span>
       )}
