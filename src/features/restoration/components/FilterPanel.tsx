@@ -9,6 +9,8 @@ interface FilterPanelProps {
   assumptions: ReactNode
   /** What narrows the plans; absent while there are none. */
   filters?: ReactNode
+  /** The switch of the quiet squares — every station of the sector; absent while there are none. */
+  stations?: ReactNode
   /** The sector's imported layers, when the user may see any. */
   importedLayers?: ReactNode
   basemap: Basemap
@@ -21,7 +23,7 @@ interface FilterPanelProps {
 
 const BASEMAP_LABEL: Record<Basemap, string> = { faint: 'باهت', medium: 'متوسط', clear: 'واضح' }
 
-export function FilterPanel({ activeCount, assumptions, filters, importedLayers, basemap, onBasemap, onPlans, onReset, onCollapse }: FilterPanelProps) {
+export function FilterPanel({ activeCount, assumptions, filters, stations, importedLayers, basemap, onBasemap, onPlans, onReset, onCollapse }: FilterPanelProps) {
   return (
     <aside className="rc-float rc-drawer rc-filters" id="rc-filters" aria-label="خيارات العرض والتصفية">
       <header className="rc-drawer__head">
@@ -54,6 +56,7 @@ export function FilterPanel({ activeCount, assumptions, filters, importedLayers,
 
         <fieldset className="rc-field rc-layers">
           <legend className="rc-field__label">طبقات الخريطة</legend>
+          {stations}
           <div className="rc-basemap">
             <label htmlFor="rc-basemap">وضوح خريطة الأساس</label>
             <input

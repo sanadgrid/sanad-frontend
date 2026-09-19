@@ -29,6 +29,9 @@ export interface MapLayer {
   style: { color: string }
   /** Its station points, so one can be found without reading the layer. Absent until worked out for an older import. */
   stations?: StationEntry[]
+  /** Set while the layer waits in the trash: hidden everywhere, its parts untouched. Milliseconds since the epoch. */
+  deletedAt?: number
+  deletedBy?: string
 }
 
 export interface LayerUpload {
@@ -300,11 +303,23 @@ async function removeLayerDocs(sectorId: string, layerId: string): Promise<void>
   features.delete(layerId)
 }
 
-export async function deleteMapLayer(sectorId: string, layerId: string): Promise<void> {
+/**
+ * Into the trash, or out of it: the index alone changes — one read and one write
+ * however many layers, and not one of their parts is read or deleted. Resolves
+ * with the whole list, the trashed layers included.
+ */
+export async function trashMapLayers(sectorId: string, layerIds: string[]): Promise<MapLayer[]> {
   if (!isFirebaseConfigured) throw new Error('map layers: the database is not configured')
-  await removeLayerDocs(sectorId, layerId)
-  await updateIndex(sectorId, [{ remove: layerId }])
+  return updateIndex(sectorId, [{ trash: layerIds, at: Date.now(), by: (await currentUid()) ?? undefined }])
 }
+
+export async function restoreMapLayers(sectorId: string, layerIds: string[]): Promise<MapLayer[]> {
+  if (!isFirebaseConfigured) throw new Error('map layers: the database is not configured')
+  return updateIndex(sectorId, [{ restore: layerIds }])
+}
+
+/** Only an admin can delete anything: for anyone else the expired layers simply stay hidden. */
+export const canPurgeLayers = async () => isFirebaseConfigured && Boolean(await currentUid()) && isCurrentUserAdmin()
 
 export interface RemovedLayers {
   removed: string[]
@@ -313,6 +328,7 @@ export interface RemovedLayers {
 }
 
 /**
+ * For good — what `حذف نهائي` and the thirty days do, never a first deletion.
  * Several layers, one after the other, stopping at the first that fails. The
  * index is written once, at the end, for those that went — so a run cut short
  * still leaves the list true. Rejects only when that one write fails: the

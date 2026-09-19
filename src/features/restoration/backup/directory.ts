@@ -54,6 +54,28 @@ export function buildDirectory(layers: ListedLayer[]): StationDirectory {
   return directory
 }
 
+/** One place of one number — the key of a station of the plans on the map, too. */
+export const placeKey = (point: { no: string; at: LatLng }) => `${point.no}@${point.at.lng},${point.at.lat}`
+
+/**
+ * The quiet squares of the map: every place of every station, whatever layers
+ * are switched on. A station of the plans is drawn by the plans (`drawn`, by
+ * `placeKey`), and one listed by a layer that is shown (`shown`) by that layer —
+ * no place is ever marked twice.
+ */
+export function baseStations(layers: ListedLayer[], drawn: ReadonlySet<string>, shown: ReadonlySet<string>): StationPoint[] {
+  const places = new Map<string, { point: StationPoint; covered: boolean }>()
+  for (const layer of layers)
+    for (const station of layer.stations ?? []) {
+      const point: StationPoint = { no: station.no, name: stationNameOf(station), at: toLatLng(station.c), layerId: layer.id, layerName: layer.name ?? '' }
+      const key = placeKey(point)
+      const known = places.get(key)
+      if (known) known.covered ||= shown.has(layer.id)
+      else places.set(key, { point, covered: shown.has(layer.id) })
+    }
+  return [...places].flatMap(([key, { point, covered }]) => (covered || drawn.has(key) ? [] : [point]))
+}
+
 /** A plan may name a feeder ("7001/F3"): it stands where its station does. */
 export const locate = (directory: StationDirectory, no: string) =>
   directory.get(stationNoOf(normalizeQuery(no)) ?? normalizeQuery(no)) ?? null

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
-import { locate, placeOf, placesOf, type StationDirectory } from '../backup/directory'
+import { locate, placeOf, placesOf, toPosition, type StationDirectory } from '../backup/directory'
 import { ratioLabel } from '../backup/format'
 import type { BackupCase, CaseResult } from '../backup/model'
 import type { SupportLink } from '../backup/planNetwork'
@@ -61,10 +61,15 @@ interface PlanDetailProps {
   onPlan: (caseId: string) => void
 }
 
+const PLAN_DELETE_NOTE = 'سيتم حذف الخطة فقط. المحطات تبقى على الخريطة في طبقاتها، ويمكنك التراجع خلال 30 يوماً من المحذوفات.'
+const OFF_LAYERS = 'المحطة غير موجودة في الطبقات الحالية'
+
 export function PlanDetail(props: PlanDetailProps) {
   const { plan, result, ratingA, directory, canEdit, busy, onBack, onEdit, onDelete, onShowOnMap } = props
   const [confirming, setConfirming] = useState(false)
   const missing = [plan.main, ...plan.backups].filter((e) => !placeOf(directory, e)).map((e) => e.no)
+  // drawn where the plan says, though no layer lists the station there any more: its layer was deleted
+  const offLayers = directory.size === 0 ? [] : [plan.main, ...plan.backups].filter((e) => e.at && !placesOf(directory, e.no).some((p) => toPosition(p.at).join() === e.at?.join())).map((e) => e.no)
   // pasted in bulk, the number stands at several places and nobody has said which
   const unsettled = [plan.main, ...plan.backups].filter((e) => !e.at && placesOf(directory, e.no).length > 1).map((e) => e.no)
   const names = plan.backups.map((b) => {
@@ -96,17 +101,24 @@ export function PlanDetail(props: PlanDetailProps) {
       </div>
 
       {confirming && (
-        <p className="rc-imported__confirm" role="alert">
-          <span>
-            حذف خطة «<bdi className="num">{plan.main.no}</bdi>» نهائياً؟
-          </span>
-          <button className="rc-link rc-link--danger" type="button" disabled={busy} onClick={onDelete}>
-            حذف
-          </button>
-          <button className="rc-link" type="button" onClick={() => setConfirming(false)}>
-            تراجع
-          </button>
-        </p>
+        <div className="rc-confirm" role="alertdialog" aria-label="حذف الخطة">
+          <p>
+            <b>
+              حذف خطة «<bdi className="num">{plan.main.no}</bdi>»؟
+            </b>{' '}
+            {PLAN_DELETE_NOTE}
+          </p>
+          <div>
+            {/* the keyboard lands on the answer that loses nothing */}
+            <button className="rc-btn" type="button" autoFocus onClick={() => setConfirming(false)}>
+              إلغاء
+            </button>
+            <button className="rc-btn rc-btn--danger" type="button" disabled={busy} onClick={onDelete}>
+              <Icon name="trash" size={14} />
+              حذف الخطة
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="rc-feeder__head">
@@ -149,6 +161,15 @@ export function PlanDetail(props: PlanDetailProps) {
             {unsettled.join(' · ')}
           </bdi>{' '}
           — له أكثر من موقع على الخريطة.{canEdit ? ' حدّد الموقع من «تعديل».' : ''}
+        </p>
+      )}
+
+      {offLayers.length > 0 && (
+        <p className="rc-plan__quiet">
+          <bdi className="num" dir="ltr">
+            {offLayers.join(' · ')}
+          </bdi>{' '}
+          — {OFF_LAYERS}
         </p>
       )}
 

@@ -4,51 +4,31 @@ import { signOutUser, type AuthUser } from '../../services/auth'
 import { listSectors } from '../../services/sectors'
 import { dataKind } from './backup/planNetwork'
 import type { DataAction } from './components/DataMenu'
+import { Toast } from './components/Toast'
 import { TopBar } from './components/TopBar'
 import { Dashboard } from './Dashboard'
+import { layerActions, planActions, type Run } from './dataActions'
 import { builtInSectors, DEFAULT_SECTOR_ID, sectorInfo, type SectorSummary } from './sectors'
 import { useBackupPlans } from './useBackupPlans'
 import { useBasemap } from './useBasemap'
 import { useMapLayers } from './useMapLayers'
 import { useTheme } from './useTheme'
+import { useToast } from './useToast'
 import './RestorationPage.css'
 import './PlansNetwork.css'
+import './PlanEntry.css'
 
 // Only admins ever open them, so the file reader and the clean-up are not part of everyone's download.
 const ImportDialog = lazy(() => import('./components/ImportDialog').then((m) => ({ default: m.ImportDialog })))
 const CleanupDialog = lazy(() => import('./components/CleanupDialog').then((m) => ({ default: m.CleanupDialog })))
 
-interface Toast {
-  kind: 'ok' | 'error' | 'notice'
-  text: string
-}
-
 type AdminDialog = 'import' | 'cleanup' | null
 
-const TOAST_MS = 6000
 const PAGE_TITLE = 'قدرة استعادة الخدمة — SanadGrid'
 
 // What people read when something fails. The technical reason (provider codes,
 // rule denials) is for the console only.
 const SIGN_OUT_FAILED = 'تعذّر تسجيل الخروج. حاول مرة أخرى.'
-const LAYER_DELETED = 'تم حذف الطبقة'
-const LAYER_DELETE_FAILED = 'تعذّر حذف الطبقة. تأكد من صلاحياتك وحاول مرة أخرى.'
-const TWINS_DELETED = 'تم حذف الطبقات المكررة'
-
-/** A run of deletions that stopped half-way: what went is gone, and the message says where it stopped. */
-class StoppedDeleting extends Error {
-  text: string
-
-  constructor(removed: number, total: number, name: string) {
-    super('map layers: the deletion stopped half-way')
-    this.text = `حُذفت ${removed} من ${total}، ثم تعذّر حذف «${name}». حاول مرة أخرى للباقي.`
-  }
-}
-const PLAN_SAVED = 'تم حفظ الخطة'
-const PLANS_SAVED = 'تم حفظ الخطط'
-const PLAN_DELETED = 'تم حذف الخطة'
-const RATING_SAVED = 'تم حفظ سعة القاطع المعتمدة'
-const PLAN_WRITE_FAILED = 'تعذّر حفظ التغيير. تأكد من صلاحياتك وحاول مرة أخرى.'
 const PLANS_NOTICE = {
   stale: 'تعذّر تحديث الخطط الآن. تُعرض آخر نسخة محفوظة.',
   unavailable: 'تعذّر الوصول إلى الخطط الآن. حاول مرة أخرى بعد قليل.',
@@ -71,7 +51,7 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
   const [dialog, setDialog] = useState<AdminDialog>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [toast, setToast] = useState<Toast | null>(null)
+  const { toast, show: setToast, dismiss } = useToast()
   const [theme, toggleTheme] = useTheme()
   const [basemap, setBasemap] = useBasemap()
 
@@ -106,18 +86,12 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
     else setToast({ kind: 'notice', text: PLANS_NOTICE[notice] })
   })
 
-  useEffect(() => {
-    if (!toast) return
-    const timer = setTimeout(() => setToast(null), TOAST_MS)
-    return () => clearTimeout(timer)
-  }, [toast])
-
   /** Resolves to whether the task went through; a failure has been said on screen by then. */
-  const run = async (task: () => Promise<void>, failed: string | ((error: unknown) => string), done?: string) => {
+  const run: Run = async (task, failed, done) => {
     setBusy(true)
     try {
       await task()
-      if (done) setToast({ kind: 'ok', text: done })
+      if (done) setToast(typeof done === 'string' ? { kind: 'ok', text: done } : done)
       return true
     } catch (error) {
       console.error('restoration:', error)
@@ -127,17 +101,6 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
       setBusy(false)
     }
   }
-
-  const deleteLayers = (layerIds: string[]) =>
-    run(
-      async () => {
-        const { removed, failed } = await mapLayers.removeMany(layerIds)
-        const name = mapLayers.layers.find((layer) => layer.id === failed)?.name
-        if (failed) throw new StoppedDeleting(removed.length, layerIds.length, name ?? 'إحدى الطبقات')
-      },
-      (error) => (error instanceof StoppedDeleting ? error.text : LAYER_DELETE_FAILED),
-      TWINS_DELETED,
-    )
 
   const dataActions: DataAction[] = isAdmin
     ? [
@@ -176,12 +139,8 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
           bulkOpen={bulkOpen && isAdmin}
           onBulk={setBulkOpen}
           onBasemap={setBasemap}
-          onDeleteLayer={(layerId) => run(() => mapLayers.remove(layerId), LAYER_DELETE_FAILED, LAYER_DELETED)}
-          onDeleteLayers={deleteLayers}
-          onSavePlan={(saved) => run(() => backupPlans.save(saved), PLAN_WRITE_FAILED, PLAN_SAVED)}
-          onSavePlans={(saved) => run(() => backupPlans.saveMany(saved), PLAN_WRITE_FAILED, PLANS_SAVED)}
-          onDeletePlan={(caseId) => run(() => backupPlans.remove(caseId), PLAN_WRITE_FAILED, PLAN_DELETED)}
-          onPlanRating={(ratingA) => run(() => backupPlans.setRating(ratingA), PLAN_WRITE_FAILED, RATING_SAVED)}
+          planActions={planActions(backupPlans, run)}
+          layerActions={layerActions(mapLayers, run)}
         />
       </main>
 
@@ -195,11 +154,7 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
         </Suspense>
       )}
 
-      {toast && (
-        <div className={`rc-toast rc-toast--${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}>
-          {toast.text}
-        </div>
-      )}
+      {toast && <Toast toast={toast} onDismiss={dismiss} />}
     </div>
   )
 }

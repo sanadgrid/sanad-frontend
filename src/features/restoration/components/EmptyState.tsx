@@ -1,19 +1,23 @@
 import { Icon } from '../../../components/Icon'
 import type { Coverage } from '../backup/planNetwork'
+import { ordinal } from '../backup/format'
+import { WIZARD_STEPS } from '../backup/wizard'
 import { CoverageLine } from './KpiCards'
 
 interface EmptyStateProps {
   coverage: Coverage
   /** Admins add plans; everybody else waits for them. */
   canAdd: boolean
-  onAdd: () => void
+  /** There are stations on the map to click. */
+  canPick: boolean
   onPick: () => void
+  onManual: () => void
   onBulk: () => void
   onDismiss: () => void
 }
 
 /** No plans yet: what the page needs, said once, over a map that stays usable behind it. */
-export function EmptyState({ coverage, canAdd, onAdd, onPick, onBulk, onDismiss }: EmptyStateProps) {
+export function EmptyState({ coverage, canAdd, canPick, onPick, onManual, onBulk, onDismiss }: EmptyStateProps) {
   return (
     <section className="rc-float rc-empty" aria-label="لا توجد خطط بعد">
       <button className="rc-icon-btn rc-icon-btn--small rc-empty__close" type="button" aria-label="إخفاء" title="إخفاء" onClick={onDismiss}>
@@ -23,24 +27,35 @@ export function EmptyState({ coverage, canAdd, onAdd, onPick, onBulk, onDismiss 
       <h2>{canAdd ? 'أضف أول خطة تغذية بديلة' : 'لا توجد خطط تغذية بديلة بعد'}</h2>
       <p>
         {canAdd
-          ? 'تُبنى هذه الصفحة من خطط التغذية البديلة: العنصر الرئيسي وحمله، ثم بدائله بالترتيب وأحمالها. كل خطة تضيفها تظهر على الخريطة وفي المؤشرات فوراً.'
+          ? 'تُبنى هذه الصفحة من خطط التغذية البديلة. كل خطة تضيفها تظهر على الخريطة وفي المؤشرات فوراً، في ثلاث خطوات:'
           : 'تُبنى هذه الصفحة من خطط التغذية البديلة التي يضيفها مشرف القطاع. الطبقات المستوردة متاحة على الخريطة من خيارات التصفية.'}
       </p>
       {canAdd && (
-        <div className="rc-empty__actions">
-          <button className="rc-btn rc-btn--accent" type="button" onClick={onAdd}>
-            <Icon name="plus" size={15} />
-            إضافة خطة
-          </button>
-          <button className="rc-btn" type="button" disabled={coverage.imported === 0} onClick={onPick}>
-            <Icon name="crosshair" size={15} />
-            اختر من الخريطة
-          </button>
-          <button className="rc-btn" type="button" onClick={onBulk}>
-            <Icon name="table" size={15} />
-            إدخال جماعي
-          </button>
-        </div>
+        <>
+          <ol className="rc-empty__steps" aria-label="خطوات إضافة الخطة">
+            {WIZARD_STEPS.map((s) => (
+              <li key={s.step}>
+                <i aria-hidden="true">{ordinal(s.step - 1)}</i>
+                {s.label}
+              </li>
+            ))}
+          </ol>
+          <div className="rc-empty__actions">
+            <button className="rc-btn rc-btn--accent" type="button" disabled={!canPick} onClick={onPick}>
+              <Icon name="crosshair" size={15} />
+              اختر من الخريطة
+            </button>
+            <button className="rc-btn" type="button" onClick={onManual}>
+              <Icon name="edit" size={15} />
+              إدخال يدوي
+            </button>
+            <button className="rc-btn" type="button" onClick={onBulk}>
+              <Icon name="table" size={15} />
+              إدخال جماعي
+            </button>
+          </div>
+          {!canPick && <p className="rc-empty__hint">لا توجد محطات على الخريطة بعد — استورد طبقات الخريطة أولاً، أو أدخل الخطة يدوياً.</p>}
+        </>
       )}
       <p className="rc-empty__coverage">
         <CoverageLine coverage={coverage} />

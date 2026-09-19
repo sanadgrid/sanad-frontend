@@ -2,6 +2,7 @@ import L from 'leaflet'
 import { continuesLine } from '../import/contents'
 import { stationNoOf } from '../import/stations'
 import type { CompactFeature, Position } from '../import/types'
+import { popupContent, type StationActions } from './stationPopup'
 
 /** Below Leaflet's overlay pane (400), where the ties and stations are drawn. */
 export const IMPORTED_PANE = 'rc-imported'
@@ -80,7 +81,7 @@ class NumberPlan {
 
   shows(station: StationMarker, map: L.Map): boolean {
     const zoom = map.getZoom()
-    if (zoom < STATION_LABEL_ZOOM) return false
+    if (zoom < station.labelZoom) return false
     if (zoom !== this.zoom) this.work(map, zoom)
     return this.numbered.has(station)
   }
@@ -113,7 +114,8 @@ class NumberPlan {
     })
     this.numbered = new Set()
     for (const { station, square, label } of placed) {
-      if (!free(label, square)) continue
+      // every square is in the way of a number, but only a station close enough to show its own asks for one
+      if (zoom < station.labelZoom || !free(label, square)) continue
       take(label)
       this.numbered.add(station)
     }
@@ -134,7 +136,7 @@ function planOf(map: L.Map): NumberPlan {
  * canvas: hundreds of them cost no DOM nodes, and the numbers only appear once
  * the map is close enough for them not to pile up.
  */
-class StationMarker extends L.CircleMarker {
+export class StationMarker extends L.CircleMarker {
   declare _renderer: CanvasInternals
   declare _map: L.Map
   declare _point: L.Point
@@ -142,12 +144,17 @@ class StationMarker extends L.CircleMarker {
   declare _pxBounds: L.Bounds
   declare _empty: () => boolean
   no: string
+  /** From this zoom the number is shown, where there is room for it. */
+  labelZoom: number
+  /** How rounded the square is: a smaller one keeps sharper corners, or it would read as a dot. */
+  corner = STATION_CORNER
   labelColor = '#000'
   haloColor = '#fff'
 
-  constructor(at: L.LatLngTuple, options: L.CircleMarkerOptions, no: string) {
+  constructor(at: L.LatLngTuple, options: L.CircleMarkerOptions, no: string, labelZoom = STATION_LABEL_ZOOM) {
     super(at, options)
     this.no = no
+    this.labelZoom = labelZoom
   }
 
   onAdd(map: L.Map) {
@@ -167,7 +174,7 @@ class StationMarker extends L.CircleMarker {
   _updateBounds() {
     circleInternals._updateBounds.call(this)
     // whether or not this station is given a number: the plan is only worked out when the canvas is drawn
-    if (this._map.getZoom() < STATION_LABEL_ZOOM) return
+    if (this._map.getZoom() < this.labelZoom) return
     const { x, y } = this._point
     this._pxBounds.extend([x + LABEL_REACH, y - LABEL_HALF_HEIGHT]).extend([x + LABEL_REACH, y + LABEL_HALF_HEIGHT])
   }
@@ -178,7 +185,7 @@ class StationMarker extends L.CircleMarker {
     const { x, y } = this._point
     const r = this._radius
     ctx.beginPath()
-    if (ctx.roundRect) ctx.roundRect(x - r, y - r, r * 2, r * 2, STATION_CORNER)
+    if (ctx.roundRect) ctx.roundRect(x - r, y - r, r * 2, r * 2, this.corner)
     else ctx.rect(x - r, y - r, r * 2, r * 2)
     this._renderer._fillStroke(ctx, this)
     if (!planOf(this._map).shows(this, this._map)) return
@@ -197,7 +204,7 @@ class StationMarker extends L.CircleMarker {
 }
 
 // what a drawn shape says when it is hovered or clicked
-const info = new WeakMap<L.Layer, FeatureText>()
+const info = new WeakMap<L.Layer, CompactFeature>()
 
 // names and descriptions come from a file: they are never trusted as markup
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -259,21 +266,26 @@ export function settleStations(layers: Iterable<DrawnImportedLayer>, renderer: L
   renderer.fire('update')
 }
 
+/** What can be done with the place, when it is a station: the page decides, the popup offers it. */
+function actionsFor(text: FeatureText, at: L.LatLngTuple | null, actionsOf: StationActions | undefined) {
+  const no = at && stationNoOf(text.n)
+  return no && actionsOf ? actionsOf({ no, at: { lat: at[0], lng: at[1] } }) : []
+}
+
 // Leaflet sinks a popup's tip into its anchor, which suits a pin; over a small square it would hide the square
 const OVER_A_POINT: L.PointTuple = [0, -3]
 
 /** The popup of a place picked in the list. It never moves the map: whoever opens it is already on the way there. */
-export function openDetail(map: L.Map, text: FeatureText, at: L.LatLngExpression, onPoint: boolean): L.Popup {
-  return L.popup({ className: 'rc-popup', maxWidth: 300, maxHeight: 240, autoPan: false, ...(onPoint && { offset: OVER_A_POINT }) })
-    .setLatLng(at)
-    .setContent(detailHtml(text))
-    .openOn(map)
+export function openDetail(map: L.Map, text: FeatureText, at: L.LatLngTuple, onPoint: boolean, actionsOf?: StationActions): L.Popup {
+  const popup = L.popup({ className: 'rc-popup', maxWidth: 300, maxHeight: 240, autoPan: false, ...(onPoint && { offset: OVER_A_POINT }) }).setLatLng(at)
+  return setDetail(popup, text, onPoint ? at : null, actionsOf).openOn(map)
 }
 
-export const setDetail = (popup: L.Popup, text: FeatureText) => popup.setContent(detailHtml(text))
+export const setDetail = (popup: L.Popup, text: FeatureText, at: L.LatLngTuple | null, actionsOf?: StationActions) =>
+  popup.setContent(popupContent(detailHtml(text), actionsFor(text, at, actionsOf), () => popup.close()))
 
 /** A name on hover and the details on click, with one tooltip for the whole layer. */
-export function describeOnMap(group: L.FeatureGroup, map: L.Map) {
+export function describeOnMap(group: L.FeatureGroup, map: L.Map, actionsOf?: StationActions) {
   const tooltip = L.tooltip({ className: 'rc-tooltip', direction: 'top', offset: [0, -6] })
   group
     .on('mouseover', (event: L.LeafletMouseEvent) => {
@@ -285,9 +297,7 @@ export function describeOnMap(group: L.FeatureGroup, map: L.Map) {
     .on('click', (event: L.LeafletMouseEvent) => {
       const feature = info.get(event.propagatedFrom)
       if (!feature || (!feature.n && !feature.g && !feature.d)) return
-      L.popup({ className: 'rc-popup', maxWidth: 300, maxHeight: 240 })
-        .setLatLng(event.latlng)
-        .setContent(detailHtml(feature))
-        .openOn(map)
+      const popup = L.popup({ className: 'rc-popup', maxWidth: 300, maxHeight: 240 }).setLatLng(event.latlng)
+      setDetail(popup, feature, feature.t === 'p' ? flip(feature.c) : null, actionsOf).openOn(map)
     })
 }

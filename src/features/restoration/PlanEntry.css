@@ -1,0 +1,593 @@
+/* The way into a new plan and the way back from a deletion: the button on the
+   map, the three steps, the trash and the message that can undo.
+   Colours come from the theme tokens (--rc-*) in tokens.css. */
+
+/* ---------- «إضافة خطة»: always on the map for whoever may add one ---------- */
+.rc-addplan {
+  position: fixed;
+  inset-block-end: calc(18px + env(safe-area-inset-bottom));
+  inset-inline-end: 16px;
+  /* under the sheets and their scrim, over the page */
+  z-index: 1100;
+  pointer-events: auto;
+}
+
+.rc-addplan__button {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--rc-accent-fill);
+  color: var(--rc-on-accent);
+  box-shadow: var(--rc-shadow-pop);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rc-addplan__button svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* a round button on a phone: the words are for the wide screen and for screen readers */
+.rc-addplan__button span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.rc-addplan__button:hover {
+  background: var(--rc-accent-fill-hover);
+}
+
+.rc-addplan__button:focus-visible {
+  outline: 3px solid var(--rc-focus-halo);
+  outline-offset: 2px;
+}
+
+.rc-menu__list.rc-addplan__list {
+  inset-block: auto calc(100% + 10px);
+  width: min(300px, 100vw - 32px);
+  padding: 6px;
+}
+
+.rc-addplan__list button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.rc-addplan__list button:disabled:hover {
+  background: none;
+}
+
+.rc-addplan__list .is-primary:not(:disabled) {
+  background: var(--rc-accent-soft);
+}
+
+.rc-addplan__list button:focus-visible {
+  outline: 2px solid var(--rc-focus);
+  outline-offset: -2px;
+}
+
+/* ---------- the three steps ---------- */
+.rc-steps {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rc-steps li {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.rc-steps button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 8px 5px 5px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 99px;
+  background: var(--rc-fill);
+  color: var(--rc-muted);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rc-steps button:disabled {
+  cursor: default;
+}
+
+.rc-steps i {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--rc-track);
+  color: var(--rc-text-2);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.rc-steps .is-current button {
+  border-color: var(--rc-accent-line);
+  background: var(--rc-accent-soft);
+  color: var(--rc-heading);
+  opacity: 1;
+}
+
+.rc-steps .is-current i {
+  background: var(--rc-accent-fill);
+  color: var(--rc-on-accent);
+}
+
+.rc-steps .is-done button {
+  color: var(--rc-text-2);
+}
+
+.rc-steps .is-done i {
+  background: var(--rc-ok-soft);
+  color: var(--rc-ok-text);
+}
+
+.rc-steps button:not(:disabled):hover {
+  border-color: var(--rc-accent-line);
+}
+
+.rc-wizard {
+  display: grid;
+  gap: 12px;
+}
+
+.rc-wizard__ask,
+.rc-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--rc-bad-text) 30%, transparent);
+  border-radius: 12px;
+  background: var(--rc-bad-soft);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--rc-text);
+}
+
+.rc-wizard__ask p,
+.rc-confirm p {
+  margin: 0;
+}
+
+.rc-wizard__ask > div,
+.rc-confirm > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rc-confirm .rc-btn,
+.rc-wizard__ask .rc-btn {
+  min-height: 34px;
+}
+
+/* the number, for whoever would rather type it than look for its square */
+.rc-picksearch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rc-picksearch .rc-stationno {
+  flex: 1;
+}
+
+.rc-picksearch input {
+  width: 100%;
+  height: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 9px;
+  background: var(--rc-inset);
+  color: var(--rc-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.rc-picksearch input::placeholder {
+  font-family: var(--font-ar, inherit);
+  text-align: right;
+}
+
+.rc-picksearch input:focus-visible {
+  border-color: var(--rc-accent);
+  outline: 2px solid var(--rc-focus-halo);
+  outline-offset: 0;
+}
+
+.rc-picksearch .rc-btn {
+  min-height: 36px;
+  padding-inline: 12px;
+}
+
+.rc-picksearch p {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--rc-warn-text);
+}
+
+/* ---------- step ٣: the loads ---------- */
+.rc-loads__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rc-loads__head p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--rc-muted);
+}
+
+.rc-loads__head .rc-link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.rc-loads__rows {
+  display: grid;
+  gap: 8px;
+}
+
+.rc-loads__row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 132px;
+  align-items: center;
+  gap: 8px;
+}
+
+.rc-loads__row--main {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rc-line-soft);
+}
+
+.rc-loads__station {
+  display: grid;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--rc-heading);
+}
+
+.rc-loads__station bdi {
+  justify-self: start;
+}
+
+.rc-loads__station small {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--rc-muted);
+}
+
+.rc-loads__input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rc-muted);
+}
+
+/* large enough to hit with a thumb, and to read from a step back */
+.rc-planform .rc-loads__input input {
+  width: 100%;
+  height: 44px;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.rc-loads__more {
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 12px;
+}
+
+.rc-loads__more summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--rc-text-2);
+  list-style: none;
+  cursor: pointer;
+}
+
+.rc-loads__more summary::-webkit-details-marker {
+  display: none;
+}
+
+.rc-loads__more summary svg {
+  flex: none;
+  transition: transform 0.15s;
+}
+
+.rc-loads__more[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.rc-loads__more summary small {
+  margin-inline-start: auto;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--rc-muted);
+}
+
+.rc-loads__more[open] {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
+.rc-loads__more[open] > :not(summary) {
+  margin-inline: 12px;
+}
+
+.rc-loads__more > .rc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-self: start;
+}
+
+.rc-loads__why {
+  margin: 0;
+  font-size: 12px;
+  color: var(--rc-warn-text);
+}
+
+.rc-loads__why.is-ready {
+  color: var(--rc-ok-text);
+}
+
+/* ---------- the trash: of the plans, and of the imported layers ---------- */
+.rc-trash {
+  border-top: 1px solid var(--rc-line-soft);
+  padding-top: 8px;
+}
+
+.rc-trash summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--rc-text-2);
+  list-style: none;
+  cursor: pointer;
+}
+
+.rc-trash summary::-webkit-details-marker {
+  display: none;
+}
+
+.rc-trash summary svg:last-child {
+  margin-inline-start: auto;
+  transition: transform 0.15s;
+}
+
+.rc-trash[open] summary svg:last-child {
+  transform: rotate(180deg);
+}
+
+.rc-trash__note {
+  margin: 4px 0 6px;
+  font-size: 11.5px;
+  color: var(--rc-muted);
+}
+
+.rc-trash ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rc-trash li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 10px;
+  background: var(--rc-fill);
+  font-size: 12.5px;
+}
+
+.rc-trash__what {
+  display: grid;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--rc-text);
+  overflow-wrap: anywhere;
+}
+
+.rc-trash__what b {
+  justify-self: start;
+}
+
+.rc-trash__what small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--rc-muted);
+}
+
+.rc-trash__acts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  color: var(--rc-muted);
+}
+
+/* a deletion that can be taken back is said calmly */
+.rc-imported__list li.rc-imported__confirm--soft {
+  background: var(--rc-warn-soft);
+  line-height: 1.7;
+}
+
+.rc-plan__quiet {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--rc-muted);
+}
+
+/* ---------- a message that can still be taken back ---------- */
+.rc-toast--action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-block: 8px;
+  padding-inline-end: 8px;
+}
+
+.rc-toast__action {
+  flex: none;
+  min-height: 34px;
+  padding-inline: 14px;
+  border: 1px solid currentColor;
+  border-radius: 9px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rc-toast__action:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+/* ---------- what the popup of a station offers ---------- */
+.rc-popup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.rc-popup__actions .rc-btn {
+  min-height: 32px;
+  padding-inline: 12px;
+  font-size: 12.5px;
+}
+
+/* ---------- no plans yet: what is about to happen ---------- */
+.rc-empty__steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--rc-text-2);
+}
+
+.rc-empty__steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-empty__steps li + li::before {
+  content: '←';
+  margin-inline-end: 8px;
+  color: var(--rc-faint);
+}
+
+.rc-empty__steps i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--rc-accent-soft);
+  color: var(--rc-accent-strong);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.rc-empty .rc-empty__hint {
+  font-size: 12px;
+  color: var(--rc-warn-text);
+}
+
+/* ---------- wide screens: a pill at the top of the clear area ---------- */
+@media (min-width: 1100px) {
+  .rc-addplan {
+    position: absolute;
+    inset-block: 0 auto;
+    inset-inline-end: 0;
+    z-index: 2;
+  }
+
+  .rc-addplan__button {
+    display: inline-flex;
+    gap: 8px;
+    width: auto;
+    height: 42px;
+    padding-inline: 16px 20px;
+    border-radius: 99px;
+  }
+
+  .rc-addplan__button svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .rc-addplan__button span {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  .rc-menu__list.rc-addplan__list {
+    inset-block: calc(100% + 8px) auto;
+  }
+}
