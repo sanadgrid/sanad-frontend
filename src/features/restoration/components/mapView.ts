@@ -20,6 +20,8 @@ export type MapView =
   /** `whenCovered`: only if a panel hides the station — a click on the map itself should not move it. */
   | { kind: 'station'; id: string; whenCovered?: boolean }
   | { kind: 'place'; layerId: string; place: Place }
+  /** Frame these places, whatever they are: the stations of a backup plan. */
+  | { kind: 'points'; points: LatLng[] }
 
 // kept free around what is fitted, so a marker and its label never touch a panel
 const MARGIN = 44

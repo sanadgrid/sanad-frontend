@@ -81,6 +81,14 @@
   --rc-marker-filter: drop-shadow(0 1px 2px rgba(10, 35, 64, 0.45));
   --rc-attribution: rgba(255, 255, 255, 0.82);
 
+  /* backup plans on the map: how loaded a backup ends up, the rim that lifts a
+     link off the basemap, and the ring of the main station */
+  --rc-link-calm: #0b9a68;
+  --rc-link-near: #d97706;
+  --rc-link-over: #e11d48;
+  --rc-link-casing: #fff;
+  --rc-link-main: #0a2340;
+
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-columns: minmax(0, 1fr);
@@ -151,6 +159,12 @@
   --rc-tile-filter: invert(1) hue-rotate(190deg) saturate(0.45) brightness(0.82) contrast(0.92);
   --rc-marker-filter: none;
   --rc-attribution: rgba(3, 13, 28, 0.72);
+
+  --rc-link-calm: #34d399;
+  --rc-link-near: #fbbf24;
+  --rc-link-over: #ff6b81;
+  --rc-link-casing: #061b35;
+  --rc-link-main: #fff;
 }
 
 /* the shared focus ring is a pale cyan made for navy */
@@ -2253,7 +2267,9 @@
   white-space: nowrap;
 }
 
-.rc-imported__list li.rc-imported__confirm {
+.rc-imported__list li.rc-imported__confirm,
+.rc-plan > .rc-imported__confirm {
+  margin: 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -2618,6 +2634,852 @@
   color: var(--rc-bad-text);
 }
 
+/* ---------- backup cases: the team's sheet, in a panel ---------- */
+/* a body that gives its place to another (the station's figures, to a feeder's card) */
+.rc-drawer__body[hidden] {
+  display: none;
+}
+
+.rc-case {
+  white-space: nowrap;
+}
+
+.rc-case__unit {
+  caption-side: top;
+  padding-bottom: 4px;
+  font-size: 11px;
+  text-align: start;
+  color: var(--rc-faint);
+}
+
+.rc-table.rc-case th,
+.rc-table.rc-case td {
+  padding-inline: 5px;
+}
+
+.rc-table.rc-case thead th {
+  white-space: normal;
+  line-height: 1.35;
+  vertical-align: bottom;
+}
+
+.rc-table.rc-case td:last-child {
+  min-width: 0;
+}
+
+.rc-table.rc-case tfoot th,
+.rc-table.rc-case tfoot td {
+  border-bottom: 0;
+  font-weight: 700;
+  color: var(--rc-text-strong);
+}
+
+.rc-case__backup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-case__backup > span {
+  display: grid;
+  line-height: 1.35;
+}
+
+.rc-case__backup bdi {
+  font-weight: 600;
+  color: var(--rc-text-strong);
+}
+
+.rc-case__backup small {
+  max-width: 96px;
+  overflow: hidden;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  color: var(--rc-muted);
+}
+
+/* first backup, second backup: the same badge in the table, the list, the form and on the map */
+.rc-case__order {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--rc-accent-soft);
+  color: var(--rc-accent-strong);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.rc-case__transfer {
+  font-weight: 700;
+  color: var(--rc-accent-strong);
+}
+
+.rc-case__loading {
+  display: inline-block;
+  min-width: 40px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.rc-case__loading--calm {
+  background: var(--rc-ok-soft);
+  color: var(--rc-ok-text);
+}
+
+.rc-case__loading--near {
+  background: var(--rc-warn-soft);
+  color: var(--rc-warn-text);
+}
+
+.rc-case__loading--over {
+  background: var(--rc-bad-soft);
+  color: var(--rc-bad-text);
+}
+
+.rc-detail__score > span {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+
+.rc-facts dd small {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--rc-muted);
+}
+
+/* the feeders of a station, and the card of one of them */
+.rc-feeders {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rc-feeders button {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto 52px 14px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 10px;
+  background: var(--rc-fill);
+  color: var(--rc-text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.rc-feeders button:hover {
+  border-color: var(--rc-accent-line);
+  background: var(--rc-accent-soft);
+}
+
+.rc-feeders button > span:nth-child(2) {
+  text-align: right;
+}
+
+.rc-feeders small {
+  font-size: 11px;
+  color: var(--rc-muted);
+}
+
+.rc-feeders svg {
+  color: var(--rc-faint);
+}
+
+.rc-feeder,
+.rc-plan {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.rc-feeder__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-self: start;
+}
+
+.rc-feeder__head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--rc-heading);
+}
+
+.rc-feeder__head p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--rc-muted);
+}
+
+.rc-feeder__head .rc-plan__note {
+  color: var(--rc-text-2);
+}
+
+.rc-assume {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 12px;
+  background: var(--rc-inset);
+}
+
+.rc-assume__active {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--rc-muted);
+}
+
+.rc-assume__active li.is-on {
+  padding-inline-start: 9px;
+  border-inline-start: 3px solid var(--rc-accent);
+  color: var(--rc-text);
+}
+
+.rc-assume__note {
+  font-size: 11.5px;
+  color: var(--rc-muted);
+}
+
+/* with and without the derating, side by side */
+.rc-sens {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--rc-faint);
+}
+
+.rc-sens > div {
+  display: grid;
+  gap: 1px;
+  padding: 9px 12px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 12px;
+  background: var(--rc-fill);
+  opacity: 0.72;
+}
+
+.rc-sens > div.is-current {
+  border-color: var(--rc-accent-line);
+  background: var(--rc-accent-soft);
+  opacity: 1;
+}
+
+.rc-sens span {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--rc-muted);
+}
+
+.rc-sens strong {
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-align: right;
+}
+
+.rc-sens small {
+  font-size: 11px;
+  color: var(--rc-muted);
+}
+
+/* ---------- backup plans ---------- */
+.rc-filters__plans {
+  justify-content: flex-start;
+  width: 100%;
+  background: var(--rc-accent-soft);
+  border-color: var(--rc-accent-line);
+}
+
+.rc-filters__plans svg:first-child {
+  color: var(--rc-accent-strong);
+}
+
+.rc-filters__plans svg:last-child {
+  margin-inline-start: auto;
+  color: var(--rc-muted);
+}
+
+.rc-actions__wide {
+  grid-column: 1 / -1;
+}
+
+.rc-plans .rc-drawer__body {
+  gap: 12px;
+}
+
+.rc-plans__notice {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--rc-warn-soft);
+  color: var(--rc-warn-text);
+  font-size: 12.5px;
+}
+
+.rc-plans__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.rc-plans__summary div {
+  padding: 8px 10px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 12px;
+  background: var(--rc-fill);
+}
+
+.rc-plans__summary dt {
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--rc-muted);
+}
+
+.rc-plans__summary dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.rc-plans__rating {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--rc-muted);
+}
+
+.rc-plans__rating b {
+  color: var(--rc-text-strong);
+}
+
+.rc-plans__rating input {
+  width: 72px;
+}
+
+.rc-plans__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rc-plans__tools .rc-btn {
+  flex: 1 1 auto;
+}
+
+.rc-plans__list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rc-plans__list button {
+  display: grid;
+  grid-template-columns: 9px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 12px;
+  background: var(--rc-fill);
+  color: var(--rc-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.rc-plans__list button:hover {
+  border-color: var(--rc-accent-line);
+  background: var(--rc-accent-soft);
+}
+
+.rc-plans__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--rc-status);
+}
+
+.rc-plans__main {
+  display: grid;
+  line-height: 1.3;
+}
+
+.rc-plans__main b {
+  font-size: 14.5px;
+  color: var(--rc-text-strong);
+}
+
+.rc-plans__main small {
+  font-size: 10.5px;
+  color: var(--rc-muted);
+}
+
+.rc-plans__backups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 9px;
+  font-size: 12px;
+  color: var(--rc-text-2);
+}
+
+.rc-plans__backups > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rc-plans__backups .rc-case__order {
+  width: 15px;
+  height: 15px;
+  font-size: 10px;
+}
+
+.rc-plan__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-plan__bar .rc-feeder__back {
+  margin-inline-end: auto;
+}
+
+.rc-plan__onmap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* the form: one line per element, number then load */
+.rc-planform {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.rc-planform input,
+.rc-plans__rating input {
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 9px;
+  background: var(--rc-inset);
+  color: var(--rc-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.rc-planform input.num,
+.rc-plans__rating input {
+  font-family: var(--font-en);
+  text-align: left;
+}
+
+.rc-planform input:focus-visible,
+.rc-plans__rating input:focus-visible {
+  border-color: var(--rc-accent);
+  outline: 2px solid var(--rc-focus-halo);
+  outline-offset: 0;
+}
+
+.rc-planform input[aria-invalid='true'] {
+  border-color: var(--rc-warn-text);
+}
+
+.rc-planform__rows {
+  display: grid;
+  gap: 6px;
+}
+
+.rc-planform__heads,
+.rc-planform__row {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1.25fr) minmax(0, 1fr) 26px;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-planform__heads {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rc-muted);
+}
+
+.rc-planform__row--main {
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--rc-line-strong);
+}
+
+.rc-planform__row input {
+  width: 100%;
+}
+
+.rc-planform__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rc-text-2);
+}
+
+.rc-planform__flag {
+  grid-column: 2 / -1;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--rc-warn-text);
+}
+
+.rc-planform__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-self: start;
+}
+
+.rc-planform__field {
+  display: grid;
+  gap: 6px;
+}
+
+.rc-planform__field input {
+  width: 100%;
+}
+
+.rc-planform__preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed var(--rc-accent-line);
+  border-radius: 14px;
+}
+
+.rc-planform__preview .rc-detail__score {
+  padding: 8px 12px;
+}
+
+.rc-planform__preview .rc-detail__score strong {
+  font-size: 30px;
+}
+
+.rc-planform__foot {
+  position: sticky;
+  bottom: -16px;
+  display: flex;
+  gap: 8px;
+  margin: 0 -16px -16px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--rc-line-soft);
+  background: var(--rc-raised);
+}
+
+.rc-planform__foot .rc-btn--accent {
+  flex: 1;
+}
+
+.rc-stationno {
+  position: relative;
+  min-width: 0;
+}
+
+.rc-stationno__options {
+  position: absolute;
+  inset: calc(100% + 3px) 0 auto;
+  z-index: 5;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 10px;
+  background: var(--rc-raised);
+  box-shadow: var(--rc-shadow-pop);
+  list-style: none;
+}
+
+.rc-stationno__options button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--rc-text);
+  font: inherit;
+  font-size: 12.5px;
+  direction: ltr;
+  cursor: pointer;
+}
+
+.rc-stationno__options button:hover {
+  background: var(--rc-accent-soft);
+}
+
+.rc-stationno__options bdi {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--rc-muted);
+}
+
+/* ---------- backup plans on the map ---------- */
+/* Leaflet writes strokes as attributes, which a stylesheet overrides: the links
+   take their colours from the theme, and a change of theme redraws nothing. */
+.rc-map .leaflet-rc-plans-pane > svg {
+  pointer-events: none;
+}
+
+.rc-plan-casing {
+  stroke: var(--rc-link-casing);
+  stroke-width: 7px;
+  stroke-opacity: 0.9;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.rc-plan-link {
+  stroke: var(--rc-link);
+  stroke-width: 3.5px;
+  stroke-opacity: 1;
+  stroke-linecap: round;
+  stroke-dasharray: 11 9;
+  fill: none;
+  /* the dashes travel from the backup to the main station */
+  animation: rc-plan-flow 1.6s linear infinite;
+}
+
+.rc-plan-casing:not(.is-selected),
+.rc-plan-link:not(.is-selected) {
+  stroke-opacity: 0.7;
+}
+
+.rc-plan-link:not(.is-selected) {
+  stroke-width: 2.5px;
+}
+
+.rc-plan-link--calm,
+.rc-plan-badge--calm,
+.rc-plan-amps--calm {
+  --rc-link: var(--rc-link-calm);
+}
+
+.rc-plan-link--near,
+.rc-plan-badge--near,
+.rc-plan-amps--near {
+  --rc-link: var(--rc-link-near);
+}
+
+.rc-plan-link--over,
+.rc-plan-badge--over,
+.rc-plan-amps--over {
+  --rc-link: var(--rc-link-over);
+}
+
+@keyframes rc-plan-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-plan-link {
+    animation: none;
+  }
+}
+
+.rc-plan-marker {
+  overflow: visible;
+}
+
+.rc-plan-main,
+.rc-plan-badge,
+.rc-plan-amps {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  font: 700 11.5px/1 var(--font-en);
+  white-space: nowrap;
+  color: var(--rc-text-strong);
+}
+
+/* the main station: a ring around its place, its number on a plate under it */
+.rc-plan-main {
+  top: 0;
+  left: 0;
+  flex-direction: column;
+  gap: 3px;
+  transform: translate(-50%, -17px);
+  cursor: pointer;
+}
+
+.rc-plan-main i {
+  width: 34px;
+  height: 34px;
+  border: 4px solid var(--rc-link-main);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--rc-link-main) 14%, transparent);
+  box-shadow:
+    0 0 0 2px var(--rc-link-casing),
+    inset 0 0 0 2px var(--rc-link-casing);
+}
+
+.rc-plan-main b {
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: var(--rc-link-main);
+  color: var(--rc-link-casing);
+  font-size: 12.5px;
+  box-shadow: 0 0 0 2px var(--rc-link-casing);
+}
+
+.rc-plan-main:not(.is-selected),
+.rc-plan-badge:not(.is-selected) {
+  opacity: 0.85;
+}
+
+.rc-plan-main:not(.is-selected) i {
+  width: 24px;
+  height: 24px;
+  border-width: 3px;
+}
+
+.rc-plan-main:not(.is-selected) {
+  transform: translate(-50%, -12px);
+}
+
+/* a backup: its order in the plan, then its number */
+.rc-plan-badge {
+  top: 0;
+  left: 0;
+  gap: 5px;
+  padding: 2px 8px 2px 2px;
+  border: 2px solid var(--rc-link);
+  border-radius: 99px;
+  background: var(--rc-raised);
+  box-shadow: 0 1px 4px rgba(3, 13, 28, 0.35);
+  transform: translate(-11px, -50%);
+}
+
+.rc-plan-badge i {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--rc-link);
+  color: var(--rc-link-casing);
+  font: 700 12px/1 var(--font-ar);
+  font-style: normal;
+}
+
+.rc-plan-amps {
+  top: 0;
+  left: 0;
+  padding: 3px 7px;
+  border: 1px solid var(--rc-link);
+  border-radius: 6px;
+  background: var(--rc-raised);
+  font-size: 11px;
+  transform: translate(-50%, -50%);
+}
+
+/* ---------- basemap strength ---------- */
+/* Street names are part of the tile images, so the whole basemap is washed out
+   and let through to the map's background; the stations then stand out. The
+   stops only set two variables: the map and its tiles are never touched. */
+.rc-map__tiles--themed {
+  /* Leaflet writes its own opacity on the layer */
+  opacity: var(--rc-tile-opacity, 1) !important;
+}
+
+.rc[data-basemap='faint'] {
+  --rc-tile-filter: grayscale(0.85) contrast(0.62) brightness(1.16);
+  --rc-tile-opacity: 0.55;
+}
+
+.rc[data-basemap='medium'] {
+  --rc-tile-filter: grayscale(0.7) contrast(0.74) brightness(1.12);
+  --rc-tile-opacity: 0.78;
+}
+
+.rc[data-theme='dark'][data-basemap='faint'] {
+  --rc-tile-filter: invert(1) hue-rotate(190deg) saturate(0.25) brightness(0.72) contrast(0.7);
+  --rc-tile-opacity: 0.55;
+}
+
+.rc[data-theme='dark'][data-basemap='medium'] {
+  --rc-tile-filter: invert(1) hue-rotate(190deg) saturate(0.35) brightness(0.77) contrast(0.8);
+  --rc-tile-opacity: 0.78;
+}
+
+.rc-basemap {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.rc-basemap label {
+  font-size: 13px;
+  color: var(--rc-text-2);
+}
+
+.rc-basemap input {
+  width: 100%;
+  margin: 4px 0 0;
+  accent-color: var(--rc-accent);
+  cursor: pointer;
+}
+
+.rc-basemap__stops {
+  display: flex;
+  justify-content: space-between;
+}
+
+.rc-basemap__stops button {
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--rc-faint);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.rc-basemap__stops button.is-current {
+  font-weight: 700;
+  color: var(--rc-accent-strong);
+}
+
 /* ---------- wide screens: the map is the page ---------- */
 /* The console fills the window under the top bar and nothing scrolls but the
    panels. They sit in a grid laid over the map, so no two of them can overlap:
@@ -2707,6 +3569,19 @@
     align-self: start;
     width: 380px;
     margin-inline-start: 12px;
+  }
+
+  /* the plans take the place of the station's panel: only one of the two is open */
+  .rc-plans {
+    grid-area: 2 / 3 / -1 / 4;
+    align-self: start;
+    width: 400px;
+    margin-inline-start: 12px;
+  }
+
+  /* the map is beside the panel already */
+  .rc-plan__onmap {
+    display: none;
   }
 
   .rc-sheet {

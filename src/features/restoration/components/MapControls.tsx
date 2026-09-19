@@ -4,6 +4,9 @@ import { useFullscreen } from '../useFullscreen'
 interface MapControlsProps {
   onZoom: (by: 1 | -1) => void
   onFitStations: () => void
+  /** Present for a signed-in user only. */
+  onPlans?: () => void
+  plansOpen?: boolean
 }
 
 interface ControlProps {
@@ -22,7 +25,7 @@ function Control({ icon, label, pressed, onClick }: ControlProps) {
 }
 
 /** Every button that moves the map, in one stack beside it. */
-export function MapControls({ onZoom, onFitStations }: MapControlsProps) {
+export function MapControls({ onZoom, onFitStations, onPlans, plansOpen }: MapControlsProps) {
   const fullscreen = useFullscreen('.rc')
 
   return (
@@ -30,6 +33,7 @@ export function MapControls({ onZoom, onFitStations }: MapControlsProps) {
       <Control icon="plus" label="تكبير" onClick={() => onZoom(1)} />
       <Control icon="minus" label="تصغير" onClick={() => onZoom(-1)} />
       <Control icon="fit" label="إظهار كل المحطات" onClick={onFitStations} />
+      {onPlans && <Control icon="swap" label="خطط التغذية البديلة" pressed={plansOpen} onClick={onPlans} />}
       {fullscreen.supported && (
         <Control
           icon={fullscreen.active ? 'minimize' : 'maximize'}

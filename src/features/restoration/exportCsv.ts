@@ -31,14 +31,16 @@ const escape = (value: string | number) => {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
-export function toCsv(rows: StationRow[]): string {
-  const lines = [columns.map(([header]) => header), ...rows.map((row) => columns.map(([, value]) => value(row)))]
-  return lines.map((line) => line.map(escape).join(',')).join('\r\n')
-}
+export const linesToCsv = (lines: (string | number)[][]) => lines.map((line) => line.map(escape).join(',')).join('\r\n')
 
-export function downloadCsv(rows: StationRow[], fileName: string): void {
+export const toCsv = (rows: StationRow[]) =>
+  linesToCsv([columns.map(([header]) => header), ...rows.map((row) => columns.map(([, value]) => value(row)))])
+
+export const downloadCsv = (rows: StationRow[], fileName: string) => saveCsv(toCsv(rows), fileName)
+
+export function saveCsv(csv: string, fileName: string): void {
   // the BOM makes Excel read the Arabic district names as UTF-8
-  const blob = new Blob(['﻿', toCsv(rows)], { type: 'text/csv;charset=utf-8' })
+  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url

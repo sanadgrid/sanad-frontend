@@ -43,6 +43,8 @@ interface NetworkDrawing {
   ties: MapTie[]
   layers: Layers
   selectedId: string | null
+  /** The ties of the feeder being looked at: marked, and drawn even when the ties are switched off. */
+  highlightTies: ReadonlySet<string>
   onSelect: (stationId: string) => void
 }
 
@@ -108,7 +110,7 @@ function fan(from: LatLng, to: LatLng, i: number, n: number): [number, number][]
   ]
 }
 
-function drawTies(ties: MapTie[], themed: Themed) {
+function drawTies(ties: MapTie[], themed: Themed, highlight: ReadonlySet<string>, all: boolean) {
   const parallel = new Map<string, MapTie[]>()
   for (const tie of ties) {
     const key = [tie.from.id, tie.to.id].sort().join('|')
@@ -116,9 +118,13 @@ function drawTies(ties: MapTie[], themed: Themed) {
   }
   for (const bundle of parallel.values()) {
     bundle.forEach((tie, i) => {
+      const marked = highlight.has(tie.id)
+      if (!all && !marked) return
       // keep one orientation per bundle so the fan does not fold onto itself
       const [a, b] = tie.from.id < tie.to.id ? [tie.from, tie.to] : [tie.to, tie.from]
       const path = fan(a.location, b.location, i, bundle.length)
+      // a wide band in the selection's colour under the tie itself
+      if (marked) themed(L.polyline(path, { weight: 14, lineCap: 'round', interactive: false }), (c) => ({ color: c.selection, opacity: 0.3 }))
       const weak = isWeak(tie.from) || isWeak(tie.to)
       const overhead = tie.construction === 'overhead'
       const dashArray = overhead ? OVERHEAD_DASH : undefined
@@ -137,8 +143,8 @@ function drawTies(ties: MapTie[], themed: Themed) {
 }
 
 /** Ties first, then every halo, then the markers: a halo never dims a neighbouring station. */
-export function drawNetwork({ group, themed, stations, ties, layers, selectedId, onSelect }: NetworkDrawing) {
-  if (layers.ties) drawTies(ties, themed)
+export function drawNetwork({ group, themed, stations, ties, layers, selectedId, highlightTies, onSelect }: NetworkDrawing) {
+  if (layers.ties || highlightTies.size > 0) drawTies(ties, themed, highlightTies, layers.ties)
 
   for (const s of stations) {
     if (!isWeak(s)) continue

@@ -1,12 +1,19 @@
+import type { ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
+import type { FeederRow } from '../backup/fromNetwork'
 import { STAGE_MINUTES } from '../engine'
 import type { StationRow } from '../filters'
 import { fmt, LIMIT_LABEL, STATUS, SWITCHING_LABEL } from '../labels'
+import { FeederList } from './FeederCard'
 
 interface StationDetailProps {
   row: StationRow | null
   /** Arabic name of the station's operating area. */
   areaName: string
+  feeders: FeederRow[]
+  /** The card of the feeder being looked at; it takes the place of the station's own figures. */
+  feederCard: ReactNode
+  onFeeder: (feederId: string) => void
   onClose: () => void
 }
 
@@ -22,7 +29,7 @@ const minutes = (value: number) => (
   </span>
 )
 
-export function StationDetail({ row, areaName, onClose }: StationDetailProps) {
+export function StationDetail({ row, areaName, feeders, feederCard, onFeeder, onClose }: StationDetailProps) {
   // nothing selected, nothing shown: the map keeps the room
   if (!row) return null
 
@@ -53,7 +60,9 @@ export function StationDetail({ row, areaName, onClose }: StationDetailProps) {
         </button>
       </header>
 
-      <div className="rc-drawer__body">
+      {feederCard && <div className="rc-drawer__body">{feederCard}</div>}
+
+      <div className="rc-drawer__body" hidden={Boolean(feederCard)}>
         <div className="rc-detail__chips">
           <span className={`rc-chip rc-status--${a.status}`}>
             <i aria-hidden="true" /> {STATUS[a.status].label}
@@ -144,6 +153,8 @@ export function StationDetail({ row, areaName, onClose }: StationDetailProps) {
             ))}
           </ul>
         )}
+
+        <FeederList feeders={feeders} onSelect={onFeeder} />
 
         <h3 className="rc-detail__title">
           المناقلات عبر نقاط الربط <small className="num">({a.transfers.length})</small>

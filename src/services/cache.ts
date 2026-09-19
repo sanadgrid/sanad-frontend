@@ -120,9 +120,13 @@ export const sectorsKey = (scope: CacheScope) => `${CACHE_PREFIX}sectors.${scope
 export const layersKey = (sectorId: string) => `${CACHE_PREFIX}layers.${sectorId}`
 // station lists worked out so far for older layers: a run that was cut short resumes instead of reading again
 export const stationsProgressKey = (sectorId: string) => `${layersKey(sectorId)}.stations`
+// backup plans carry real station numbers: members only, like the layers
+export const plansKey = (sectorId: string) => `${CACHE_PREFIX}plans.${sectorId}`
+
+const MEMBER_ONLY = ['layers.', 'plans.'].map((name) => `${CACHE_PREFIX}${name}`)
 
 const isMemberKey = (key: string) =>
-  key.startsWith(CACHE_PREFIX) && (key.endsWith('.member') || key.startsWith(`${CACHE_PREFIX}layers.`))
+  key.startsWith(CACHE_PREFIX) && (key.endsWith('.member') || MEMBER_ONLY.some((prefix) => key.startsWith(prefix)))
 
 /** What a signed-in user read does not stay on the device after they leave; a visitor's entries hold public data only. */
 export const clearMemberCache = () => cache.clear(isMemberKey)

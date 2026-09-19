@@ -4,6 +4,8 @@ import { listSectors, loadNetwork, seedNetwork, type LoadedNetwork, type SectorS
 import { TopBar } from './components/TopBar'
 import { Dashboard } from './Dashboard'
 import { demoNetwork } from './demoData'
+import { useBackupPlans } from './useBackupPlans'
+import { useBasemap } from './useBasemap'
 import { useMapLayers } from './useMapLayers'
 import { useTheme } from './useTheme'
 import './RestorationPage.css'
@@ -28,6 +30,10 @@ const PUBLISH_DONE = 'تم نشر البيانات'
 const PUBLISH_FAILED = 'تعذّر نشر البيانات. تأكد من صلاحياتك وحاول مرة أخرى.'
 const LAYER_DELETED = 'تم حذف الطبقة'
 const LAYER_DELETE_FAILED = 'تعذّر حذف الطبقة. تأكد من صلاحياتك وحاول مرة أخرى.'
+const PLAN_SAVED = 'تم حفظ الخطة'
+const PLAN_DELETED = 'تم حذف الخطة'
+const RATING_SAVED = 'تم حفظ سعة القاطع المعتمدة'
+const PLAN_WRITE_FAILED = 'تعذّر حفظ التغيير. تأكد من صلاحياتك وحاول مرة أخرى.'
 const LOAD_NOTICE: Record<NonNullable<LoadedNetwork['notice']>, string> = {
   stale: 'تعذّر تحديث البيانات الآن. تُعرض آخر نسخة محفوظة.',
   unavailable: 'تعذّر الوصول إلى البيانات الآن. تُعرض بيانات تجريبية مؤقتاً.',
@@ -52,6 +58,7 @@ export function RestorationPage() {
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
   const [theme, toggleTheme] = useTheme()
+  const [basemap, setBasemap] = useBasemap()
 
   useEffect(() => onAuthChange(setUser), [])
 
@@ -105,6 +112,7 @@ export function RestorationPage() {
   // the layers follow the network on screen, which is the demo sector when the chosen one has no data
   const sector = loaded?.network.sector
   const mapLayers = useMapLayers(sector?.id, uid)
+  const backupPlans = useBackupPlans(sector?.id, uid)
 
   useEffect(() => {
     if (!toast) return
@@ -112,14 +120,17 @@ export function RestorationPage() {
     return () => clearTimeout(timer)
   }, [toast])
 
+  /** Resolves to whether the task went through; a failure has been said on screen by then. */
   const run = async (task: () => Promise<void>, failed: string | ((error: unknown) => string), done?: string) => {
     setBusy(true)
     try {
       await task()
       if (done) setToast({ kind: 'ok', text: done })
+      return true
     } catch (error) {
       console.error('restoration:', error)
       setToast({ kind: 'error', text: typeof failed === 'string' ? failed : failed(error) })
+      return false
     } finally {
       setBusy(false)
     }
@@ -136,7 +147,7 @@ export function RestorationPage() {
     )
 
   return (
-    <div className="rc" data-theme={theme}>
+    <div className="rc" data-theme={theme} data-basemap={basemap}>
       <TopBar
         source={loaded?.source ?? null}
         sectors={sectors}
@@ -161,9 +172,15 @@ export function RestorationPage() {
             network={loaded.network}
             theme={theme}
             imported={mapLayers}
+            plans={backupPlans}
+            basemap={basemap}
             isAdmin={isAdmin}
             busy={busy}
+            onBasemap={setBasemap}
             onDeleteLayer={(layerId) => run(() => mapLayers.remove(layerId), LAYER_DELETE_FAILED, LAYER_DELETED)}
+            onSavePlan={(saved) => run(() => backupPlans.save(saved), PLAN_WRITE_FAILED, PLAN_SAVED)}
+            onDeletePlan={(caseId) => run(() => backupPlans.remove(caseId), PLAN_WRITE_FAILED, PLAN_DELETED)}
+            onPlanRating={(ratingA) => run(() => backupPlans.setRating(ratingA), PLAN_WRITE_FAILED, RATING_SAVED)}
           />
         ) : (
           <p className="rc-loading" role="status">

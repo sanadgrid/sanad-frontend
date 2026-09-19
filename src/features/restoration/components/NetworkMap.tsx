@@ -21,6 +21,7 @@ import {
 } from './importedLayer'
 import { fitBbox, fitPoints, flyToPoint, followClearArea, panTo, patientFit, type MapView, type Place } from './mapView'
 import { drawNetwork, LABEL_PANE, LABEL_PANE_Z, type MapStation, type MapTie, type Themed } from './networkLayers'
+import { drawPlans, PLAN_PANE, PLAN_PANE_Z, type PlanDrawing } from './planLinks'
 
 interface NetworkMapProps {
   center: LatLng
@@ -35,8 +36,13 @@ interface NetworkMapProps {
   /** The part of the map that no panel covers: views are aimed at it. */
   clearArea: RefObject<HTMLElement | null>
   selectedId: string | null
+  /** Ties to mark: those of the feeder whose loss is being looked at. */
+  highlightTies: ReadonlySet<string>
+  /** Backup plans to draw, between the imported layers and the network. */
+  plans: PlanDrawing[]
   theme: Theme
   onSelect: (stationId: string) => void
+  onSelectPlan: (planId: string) => void
 }
 
 interface DrawnLayer extends DrawnImportedLayer {
@@ -80,23 +86,29 @@ export function NetworkMap({
   view,
   clearArea,
   selectedId,
+  highlightTies,
+  plans,
   theme,
   onSelect,
+  onSelectPlan,
 }: NetworkMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const overlay = useRef<L.LayerGroup | null>(null)
+  const planLinks = useRef<L.LayerGroup | null>(null)
   // thousands of imported shapes are painted on one canvas instead of one SVG node each
   const canvas = useRef<L.Renderer | null>(null)
   const drawn = useRef(new Map<string, DrawnLayer>())
   const pointed = useRef<Pointed | null>(null)
   // the latest values, for handlers and for views asked long after the markers were drawn
   const select = useRef(onSelect)
+  const selectPlan = useRef(onSelectPlan)
   const shown = useRef(stations)
   useEffect(() => {
     select.current = onSelect
+    selectPlan.current = onSelectPlan
     shown.current = stations
-  }, [onSelect, stations])
+  }, [onSelect, onSelectPlan, stations])
 
   // Until the user moves the map himself, it keeps the stations framed in whatever
   // room the panels leave: opening the filters slides the network aside, not under them.
@@ -126,12 +138,14 @@ export function NetworkMap({
     // the credit of the tiles stays; the library's own prefix is not needed
     instance.attributionControl.setPrefix(false)
     instance.createPane(IMPORTED_PANE).style.zIndex = String(IMPORTED_PANE_Z)
+    instance.createPane(PLAN_PANE).style.zIndex = String(PLAN_PANE_Z)
     const labels = instance.createPane(LABEL_PANE)
     labels.style.zIndex = String(LABEL_PANE_Z)
     labels.style.pointerEvents = 'none'
     canvas.current = L.canvas({ pane: IMPORTED_PANE, padding: 0.5, tolerance: 4 })
     map.current = instance
     overlay.current = L.layerGroup().addTo(instance)
+    planLinks.current = L.layerGroup().addTo(instance)
     const importedLayers = drawn.current
 
     const release = () => {
@@ -162,6 +176,7 @@ export function NetworkMap({
       instance.remove()
       map.current = null
       overlay.current = null
+      planLinks.current = null
       canvas.current = null
       importedLayers.clear()
       pointed.current = null
@@ -194,8 +209,14 @@ export function NetworkMap({
       painters.current.push(paint)
       return layer.addTo(group)
     }
-    drawNetwork({ group, themed, stations, ties, layers, selectedId, onSelect: (id) => select.current(id) })
-  }, [stations, ties, layers, selectedId])
+    drawNetwork({ group, themed, stations, ties, layers, selectedId, highlightTies, onSelect: (id) => select.current(id) })
+  }, [stations, ties, layers, selectedId, highlightTies])
+
+  // Backup plans have a group of their own: a filter or a selection in the network
+  // never redraws them, and their colours are the stylesheet's, so neither does a theme.
+  useEffect(() => {
+    if (planLinks.current) drawPlans(planLinks.current, plans, (id) => selectPlan.current(id))
+  }, [plans])
 
   // Imported layers are kept apart from the network overlay: a filter or a
   // selection redraws the stations, never these, and a theme switch only restyles them.
@@ -256,7 +277,8 @@ export function NetworkMap({
       const popup = openDetail(instance, place.text, [place.at[1], place.at[0]], !place.bbox)
       pointed.current = { layerId, place, popup, drawn: false }
       completeDetail(pointed.current, drawn.current.get(layerId)?.features)
-    } else if (view.kind === 'zoom') instance.setZoom(instance.getZoom() + view.by)
+    } else if (view.kind === 'points') fitPoints(instance, view.points, clearArea.current)
+    else if (view.kind === 'zoom') instance.setZoom(instance.getZoom() + view.by)
     else if (view.kind === 'bbox') fitBbox(instance, view.bbox, clearArea.current)
     else if (!station || !panTo(instance, station.location, clearArea.current, view.whenCovered)) return
     framed.current = false

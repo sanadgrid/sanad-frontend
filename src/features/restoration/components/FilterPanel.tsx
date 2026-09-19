@@ -3,7 +3,9 @@ import { Icon } from '../../../components/Icon'
 import type { Bounds, Filters, Layers, Range } from '../filters'
 import { FORECAST_LABEL, MONTHS_AR } from '../labels'
 import type { Conditions, Period, Sector } from '../types'
+import { BASEMAPS, type Basemap } from '../useBasemap'
 import { RangeSlider } from './RangeSlider'
+import { Toggle } from './Toggle'
 
 interface FilterPanelProps {
   sector: Sector
@@ -17,6 +19,10 @@ interface FilterPanelProps {
   activeCount: number
   /** The sector's imported layers, when the user may see any. */
   importedLayers?: ReactNode
+  basemap: Basemap
+  onBasemap: (basemap: Basemap) => void
+  /** Opens the backup plans; present for a signed-in user only. */
+  onPlans?: () => void
   onConditions: (patch: Partial<Conditions>) => void
   onFilters: (patch: Partial<Filters>) => void
   onLayers: (patch: Partial<Layers>) => void
@@ -50,27 +56,13 @@ function Pills<T extends string | number | null>({ label, options, value, onChan
   )
 }
 
-interface ToggleProps {
-  label: string
-  checked: boolean
-  onChange: (checked: boolean) => void
-}
-
-function Toggle({ label, checked, onChange }: ToggleProps) {
-  return (
-    <label className="rc-toggle">
-      <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <i aria-hidden="true" />
-      <span>{label}</span>
-    </label>
-  )
-}
-
 const latin = (text: string) => (
   <span dir="ltr" className="num">
     {text}
   </span>
 )
+
+const BASEMAP_LABEL: Record<Basemap, string> = { faint: 'باهت', medium: 'متوسط', clear: 'واضح' }
 
 const toPeriod = (value: string): Period => (value === 'forecast' ? 'forecast' : Number(value))
 /** A slider dragged back to its full extent means "no filter". */
@@ -86,6 +78,9 @@ export function FilterPanel({
   bounds,
   activeCount,
   importedLayers,
+  basemap,
+  onBasemap,
+  onPlans,
   onConditions,
   onFilters,
   onLayers,
@@ -113,6 +108,14 @@ export function FilterPanel({
       </header>
 
       <div className="rc-drawer__body">
+        {onPlans && (
+          <button className="rc-btn rc-filters__plans" type="button" onClick={onPlans}>
+            <Icon name="swap" size={15} />
+            خطط التغذية البديلة
+            <Icon name="arrowLeft" size={14} />
+          </button>
+        )}
+
         <div className="rc-field">
           <label className="rc-select">
             <span>الفترة</span>
@@ -245,6 +248,26 @@ export function FilterPanel({
           <Toggle label="المشتركون الحساسون" checked={layers.sensitive} onChange={(sensitive) => onLayers({ sensitive })} />
           <Toggle label="كبار المشتركين (VIP)" checked={layers.vip} onChange={(vip) => onLayers({ vip })} />
           <Toggle label="خطوط الربط" checked={layers.ties} onChange={(ties) => onLayers({ ties })} />
+          <div className="rc-basemap">
+            <label htmlFor="rc-basemap">وضوح خريطة الأساس</label>
+            <input
+              id="rc-basemap"
+              type="range"
+              min={0}
+              max={BASEMAPS.length - 1}
+              step={1}
+              value={BASEMAPS.indexOf(basemap)}
+              aria-valuetext={BASEMAP_LABEL[basemap]}
+              onChange={(e) => onBasemap(BASEMAPS[Number(e.target.value)])}
+            />
+            <div className="rc-basemap__stops" aria-hidden="true">
+              {BASEMAPS.map((stop) => (
+                <button key={stop} type="button" tabIndex={-1} className={stop === basemap ? 'is-current' : undefined} onClick={() => onBasemap(stop)}>
+                  {BASEMAP_LABEL[stop]}
+                </button>
+              ))}
+            </div>
+          </div>
           {importedLayers}
         </fieldset>
       </div>
