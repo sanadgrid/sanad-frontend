@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { AppVersion } from '../../components/AppVersion'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
-import { navLinks } from './content'
+import { cta, footer, navLinks, signIn } from './content'
+import { Audiences } from './sections/Audiences'
+import { Capabilities } from './sections/Capabilities'
+import { ConsolePreview } from './sections/ConsolePreview'
 import { Contact } from './sections/Contact'
 import { Hero } from './sections/Hero'
-import { Monitoring } from './sections/Monitoring'
-import { Network } from './sections/Network'
-import { Solutions } from './sections/Solutions'
-import { Tenders, WhyBand } from './sections/Tenders'
-import { Ticker } from './sections/Ticker'
+import { HowItWorks } from './sections/HowItWorks'
+import { Problem } from './sections/Problem'
+import { Proof } from './sections/Proof'
+import { Trust } from './sections/Trust'
 import { useReveal } from './useReveal'
 import './HomePage.css'
 import './HomePage.motion.css'
@@ -49,7 +51,7 @@ function Nav() {
     <nav className={`nav${scrolled ? ' nav--scrolled' : ''}${open ? ' nav--open' : ''}`} aria-label="التنقل الرئيسي">
       <div className="container nav__inner">
         <a href="#home" aria-label="SanadGrid — الرئيسية" onClick={close}>
-          <Logo size={42} />
+          <Logo size={42} tone="onLight" />
         </a>
         <div className="nav__links" id="nav-links">
           {navLinks.map((l) => (
@@ -57,10 +59,19 @@ function Nav() {
               {l.label}
             </a>
           ))}
-          <a className="btn btn--outline" href="#contact" onClick={close}>
-            تواصل معنا
+          <a className="btn btn--signin nav__signin--menu" href={signIn.href}>
+            <Icon name="user" size={17} />
+            {signIn.label}
+          </a>
+          <a className="btn btn--nav" href={cta.primary.href} onClick={close}>
+            {cta.nav}
           </a>
         </div>
+        {/* phones: sign-in stays in the collapsed bar, beside the menu button */}
+        <a className="btn btn--signin nav__signin--bar" href={signIn.href} aria-label={signIn.label}>
+          <Icon name="user" size={18} />
+          <span>{signIn.label}</span>
+        </a>
         <button
           className="nav__toggle"
           type="button"
@@ -81,13 +92,20 @@ function Footer() {
   return (
     <footer className="footer">
       <div className="container footer__inner">
-        <Logo size={32} />
+        <div className="footer__brand">
+          <Logo size={34} tone="onLight" />
+          <p>{footer.line}</p>
+        </div>
         <div className="footer__links">
           {navLinks.map((l) => (
             <a href={l.href} key={l.href}>
               {l.label}
             </a>
           ))}
+          <a className="footer__signin" href={signIn.href}>
+            <Icon name="lock" size={14} />
+            {signIn.footerLabel}
+          </a>
         </div>
         <span className="footer__meta">
           <span dir="ltr" lang="en">
@@ -104,19 +122,23 @@ export function HomePage() {
   useReveal()
 
   return (
-    <>
+    <div className="home">
+      <a className="skip-link" href="#main">
+        انتقل إلى المحتوى
+      </a>
       <Nav />
-      <main>
+      <main id="main">
         <Hero />
-        <Ticker />
-        <Solutions />
-        <Monitoring />
-        <Network />
-        <Tenders />
-        <WhyBand />
+        <Problem />
+        <HowItWorks />
+        <Capabilities />
+        <Proof />
+        <ConsolePreview />
+        <Audiences />
+        <Trust />
         <Contact />
       </main>
       <Footer />
-    </>
+    </div>
   )
 }
