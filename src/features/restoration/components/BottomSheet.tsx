@@ -70,7 +70,7 @@ export function BottomSheet({ open, onToggle, listedCount, visibleCount, empty, 
             </p>
             <button className="rc-btn rc-sheet__export" type="button" onClick={onExport} disabled={visibleCount === 0}>
               <Icon name="download" size={15} />
-              تصدير <span lang="en">CSV</span>
+              تصدير <span lang="en">Excel</span>
             </button>
           </>
         )}

@@ -34,6 +34,8 @@ interface BackupPlansPanelProps {
   /** `plan` when the list does not hold it yet: a case that was just saved. */
   onSelect: (caseId: string | null, plan?: BackupCase) => void
   onExport: () => void
+  /** The same plans as an Excel workbook, in the columns the bulk entry reads. */
+  onExportExcel: () => void
   /** Many plans at once, pasted from a spreadsheet. */
   onBulk: () => void
   onShowOnMap: () => void
@@ -225,6 +227,12 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
                 <button className="rc-btn" type="button" onClick={props.onBulk}>
                   <Icon name="table" size={15} />
                   إدخال جماعي
+                </button>
+              )}
+              {rows.length > 0 && (
+                <button className="rc-btn" type="button" onClick={props.onExportExcel}>
+                  <Icon name="download" size={15} />
+                  تصدير <span lang="en">Excel</span>
                 </button>
               )}
               {rows.length > 0 && (

@@ -1,10 +1,15 @@
 import { normalizeQuery } from '../import/stations'
+import { figureOf } from './figure'
 import type { BackupLevel } from './model'
 
-// Rows copied out of a spreadsheet (tab-separated) or a CSV file, read into plan
-// lines: main element and its load, then backups and their loads in pairs. A
-// header row is optional; with one, the columns may come in any order and may
-// include the level, the voltage, the rating and a note. Pure — no I/O.
+// Rows copied out of a spreadsheet (tab-separated), a CSV file or the cells of a
+// workbook, read into plan lines: main element and its load, then backups and
+// their loads in pairs. A header row is optional; with one, the columns may come
+// in any order and may include the level, the voltage, the rating and a note.
+// Title lines above the header are left out. Pure — no I/O.
+
+// the forms of the page read figures too, and should not bring the sheet reader with them
+export { figureOf }
 
 export type ParseProblem =
   | { kind: 'noMain' }
@@ -17,7 +22,7 @@ export type ParseProblem =
   | { kind: 'badRating' }
 
 export interface ParsedRow {
-  /** The line of the pasted text, from 1, header included. */
+  /** The line of the pasted text or the row of the sheet, from 1, header included. */
   line: number
   main: { no: string; loadA: number }
   backups: { no: string; loadA: number }[]
@@ -44,7 +49,7 @@ const ORDINALS: [RegExp, string][] = [
   [/الخامس|fifth/, '5'],
 ]
 // columns of the dashboard's own export that are results, not input
-const DERIVED = /spare|transfer|final|loading|pct|mva|restor|ratio|status|derat|total|متاح|تحويل|نسبة/
+const DERIVED = /spare|transfer|final|loading|pct|mva|restor|ratio|status|derat|total|متاح|تحويل|نسبة|معتمد|استعاد/
 
 /** What a header cell names, or `null` for a column the entry does not use. */
 export function columnOf(header: string): Column | null {
@@ -99,17 +104,6 @@ const delimiterOf = (text: string) => {
   return first.split(';').length > first.split(',').length ? ';' : ','
 }
 
-/**
- * A figure as people type it: Arabic-Indic digits, "1,250" or "1٬250" for
- * thousands, "٫" for the decimal point. `null` for anything that is not a number ≥ 0.
- */
-export function figureOf(text: string): number | null {
-  const plain = normalizeQuery(text).replace(/\s/g, '').replace('٫', '.')
-  const grouped = /^\d{1,3}([,٬]\d{3})+(\.\d+)?$/.test(plain) ? plain.replace(/[,٬]/g, '') : plain
-  if (!/^\d+(\.\d+)?$/.test(grouped)) return null
-  return Number(grouped)
-}
-
 const LEVELS: [RegExp, BackupLevel][] = [
   [/^(محطة|محطه|station|s\/s|ss)$/, 'station'],
   [/^(مغذي|مغذى|feeder|f)$/, 'feeder'],
@@ -123,18 +117,43 @@ const positional = (width: number): (Column | null)[] =>
     return { kind: i % 2 === 0 ? 'backup' : 'backupLoad', order: Math.floor((i - 2) / 2) }
   })
 
-export function parseSheet(text: string): ParsedSheet {
-  const lines = splitCells(text, delimiterOf(text)).map((cells) => cells.map((cell) => cell.trim()))
-  const firstUsed = lines.findIndex((cells) => cells.some(Boolean))
-  if (firstUsed < 0) return { rows: [], hadHeader: false }
-  const named = lines[firstUsed].map(columnOf)
-  const hadHeader = named.some((column) => column?.kind === 'main')
-  const width = Math.max(...lines.map((cells) => cells.length))
-  const columns = hadHeader ? named : positional(width)
+// how far down a sheet the header may sit under its titles
+const HEADER_SEARCH = 25
+const looksLikeData = (cells: string[]) => Boolean(cells[0]) && figureOf(cells[1] ?? '') !== null
+const isTitle = (cells: string[]) => cells.filter(Boolean).length < 2 && cells.every((cell) => figureOf(cell) === null)
+
+/** The header row (or -1) and the first row read as a plan: titles above them belong to neither. */
+function startOf(lines: string[][]): { header: number; first: number } {
+  let seen = 0
+  for (let i = 0; i < lines.length && seen < HEADER_SEARCH; i += 1) {
+    if (!lines[i].some(Boolean)) continue
+    const kinds = lines[i].map((cell) => columnOf(cell)?.kind)
+    // under other lines, a note that says "main" is not enough to make a header
+    if (kinds.includes('main') && (seen === 0 || kinds.includes('mainLoad'))) return { header: i, first: i + 1 }
+    if (looksLikeData(lines[i])) break
+    seen += 1
+  }
+  const first = lines.findIndex((cells) => cells.some(Boolean) && !isTitle(cells))
+  return { header: -1, first: first < 0 ? lines.findIndex((cells) => cells.some(Boolean)) : first }
+}
+
+/** Pasted or delimited text as rows of cells, the delimiter told from the text itself. */
+export const splitRows = (text: string): string[][] => splitCells(text, delimiterOf(text))
+
+export const parseSheet = (text: string): ParsedSheet => parseRows(splitRows(text))
+
+/** `matrix[r][c]` is the cell as text; rows may be ragged, and blank ones keep the numbering. */
+export function parseRows(matrix: readonly (readonly string[])[]): ParsedSheet {
+  const lines = matrix.map((cells) => cells.map((cell) => cell.trim()))
+  const { header, first } = startOf(lines)
+  if (first < 0) return { rows: [], hadHeader: false }
+  const hadHeader = header >= 0
+  const width = Math.max(0, ...lines.slice(first).map((cells) => cells.length))
+  const columns = hadHeader ? lines[header].map(columnOf) : positional(width)
 
   const rows: ParsedRow[] = []
   lines.forEach((cells, index) => {
-    if (index < firstUsed || (hadHeader && index === firstUsed) || !cells.some(Boolean)) return
+    if (index < first || !cells.some(Boolean)) return
     const row: ParsedRow = { line: index + 1, main: { no: '', loadA: 0 }, backups: [], problems: [] }
     const pairs = new Map<number, { no: string; load: string }>()
     const pair = (order: number) => {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { figureOf } from '../backup/bulkParse'
+import { figureOf } from '../backup/figure'
 import { fmt, MONTHS_AR } from '../labels'
 import type { Assumptions } from '../usePlanNetwork'
 import { Toggle } from './Toggle'

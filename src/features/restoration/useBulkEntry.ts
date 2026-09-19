@@ -1,35 +1,51 @@
 import { useMemo, useState } from 'react'
-import { parseSheet } from './backup/bulkParse'
+import { parseRows, splitRows } from './backup/bulkParse'
 import { casesToSave, reviewRows, savedTotals, sectorAfter, type DuplicateChoice, type ReviewedRow } from './backup/bulkReview'
 import type { StationDirectory } from './backup/directory'
 import type { BackupCase, ModelOptions } from './backup/model'
+import { readSheetBytes, rowsToText, type SheetFile } from './backup/sheetFile'
+import { MAX_FILE_BYTES, SheetFileError, type WorkbookSheet } from './backup/xlsxRead'
 
 const newId = () => (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `case-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
 
-/** A spreadsheet saved as CSV is UTF-8 or, from an older Arabic Windows, its own code page. */
-export async function readSheetFile(file: File): Promise<string> {
-  const bytes = await file.arrayBuffer()
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-  } catch {
-    return new TextDecoder('windows-1256').decode(bytes)
-  }
+/** An Excel workbook or a delimited text file; a file too large is turned away before it is read. */
+export async function readSheetFile(file: File): Promise<SheetFile> {
+  if (file.size > MAX_FILE_BYTES) throw new SheetFileError('tooBig')
+  return readSheetBytes(new Uint8Array(await file.arrayBuffer()))
 }
 
-/** Pasted rows on their way to the sector's plans: read, checked, and only then saved. Reads nothing. */
+interface Book {
+  sheets: WorkbookSheet[]
+  chosen: number
+}
+
+/** Pasted rows, or the rows of a file, on their way to the sector's plans: read, checked, and only then saved. Reads nothing. */
 export function useBulkEntry(existing: BackupCase[], directory: StationDirectory, options: ModelOptions) {
   const [text, setText] = useState('')
-  // the text the preview was made from; `null` while it is still being pasted
-  const [checked, setChecked] = useState<string | null>(null)
+  // the rows the preview was made from; `null` while they are still being pasted
+  const [checked, setChecked] = useState<string[][] | null>(null)
+  const [book, setBook] = useState<Book | null>(null)
   const [choices, setChoices] = useState<ReadonlyMap<number, DuplicateChoice>>(new Map())
 
   // ids are made once per check, so choosing replace or skip does not reshuffle them
   const reviewed = useMemo(
-    () => (checked === null ? [] : reviewRows(parseSheet(checked).rows, { existing, directory, options, newId })),
+    () => (checked === null ? [] : reviewRows(parseRows(checked).rows, { existing, directory, options, newId })),
     [checked, existing, directory, options],
   )
   const choiceOf = (row: ReviewedRow): DuplicateChoice => choices.get(row.row.line) ?? 'skip'
   const toSave = casesToSave(reviewed, choiceOf)
+
+  const show = (rows: string[][]) => {
+    setChoices(new Map())
+    setChecked(rows)
+  }
+  // the sheet also goes into the box, as a paste of it would: "back" finds it there to correct
+  const showSheet = (opened: Book) => {
+    const rows = opened.sheets[opened.chosen]?.rows ?? []
+    setBook(opened)
+    setText(rowsToText(rows))
+    show(rows)
+  }
 
   return {
     text,
@@ -45,10 +61,19 @@ export function useBulkEntry(existing: BackupCase[], directory: StationDirectory
       duplicates: reviewed.filter((r) => r.duplicate).length,
       flagged: reviewed.filter((r) => r.plan && (r.notFound.length > 0 || r.ambiguous.length > 0)).length,
     },
+    /** The sheets of the workbook the preview shows; `null` for pasted rows and text files. */
+    book,
     check: (from = text) => {
-      setChoices(new Map())
-      setChecked(from)
+      setBook(null)
+      show(splitRows(from))
     },
+    checkFile: (file: SheetFile) => {
+      if (file.kind === 'book') return showSheet({ sheets: file.sheets, chosen: file.chosen })
+      setBook(null)
+      setText(file.text)
+      show(splitRows(file.text))
+    },
+    pickSheet: (chosen: number) => book && showSheet({ ...book, chosen }),
     back: () => setChecked(null),
     choose: (line: number, choice: DuplicateChoice) => setChoices((current) => new Map(current).set(line, choice)),
     chooseAll: (choice: DuplicateChoice) => setChoices(new Map(reviewed.filter((r) => r.duplicate).map((r) => [r.row.line, choice]))),

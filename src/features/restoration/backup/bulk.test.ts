@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { columnOf, figureOf, parseSheet, splitCells } from './bulkParse'
-import { bulkTemplate, casesToSave, reviewRows, savedTotals, sectorAfter } from './bulkReview'
+import { columnOf, figureOf, parseRows, parseSheet, splitCells } from './bulkParse'
+import { casesToSave, reviewRows, savedTotals, sectorAfter } from './bulkReview'
 import { buildDirectory } from './directory'
 import type { BackupCase } from './model'
 import { plansToCsv } from './planCsv'
+import { templateRows } from './planXlsx'
 
 const tsv = (...lines: (string | number)[][]) => lines.map((cells) => cells.join('\t')).join('\n')
 
@@ -112,7 +113,7 @@ describe('pasted rows', () => {
   })
 
   it('reads the template and the dashboard\'s own file back', () => {
-    const template = parseSheet(bulkTemplate())
+    const template = parseRows(templateRows().map((cells) => cells.map((cell) => String(cell ?? ''))))
     expect(template.hadHeader).toBe(true)
     expect(template.rows.map((r) => [r.main.no, r.backups.length, r.level, r.problems.length])).toEqual([['7001', 3, 'station', 0], ['7005', 2, 'feeder', 0]])
     expect(template.rows[1].ratingA).toBe(400)
@@ -121,6 +122,37 @@ describe('pasted rows', () => {
     const [back] = parseSheet(plansToCsv([plan], { ratingA: 400 }, 0.87)).rows
     expect(back).toMatchObject({ main: { no: '7001', loadA: 320 }, level: 'feeder', voltageKv: 33, ratingA: 400, demo: true, note: 'n', problems: [] })
     expect(back.backups).toEqual([{ no: '7002', loadA: 270 }, { no: '7003', loadA: 285 }])
+  })
+})
+
+describe('rows that come as cells rather than text', () => {
+  const header = ['الرئيسي', 'حمل الرئيسي', 'بديل ١', 'حمل ١']
+
+  it('title lines above the header are left out, and a row keeps the number it has in the sheet', () => {
+    const sheet = parseRows([['خطط التغذية البديلة — القطاع'], [], ['تاريخ التحديث', ''], header, ['7001', '320', '7002', '270'], [], ['7003', '٢٩٠', '7004', '1,250']])
+    expect(sheet.hadHeader).toBe(true)
+    expect(sheet.rows.map((r) => [r.line, r.main.no, r.main.loadA, r.backups[0].loadA, r.problems.length])).toEqual([[5, '7001', 320, 270, 0], [7, '7003', 290, 1250, 0]])
+  })
+
+  it('a title above rows without a header is left out too; a lone number is still a row to correct', () => {
+    expect(parseRows([['خطط القطاع'], ['7001', '320', '7002', '270']]).rows.map((r) => [r.line, r.problems.length])).toEqual([[2, 0]])
+    expect(parseSheet('7001\n7002\t300').rows.map((r) => [r.line, r.problems.map((p) => p.kind)])).toEqual([[1, ['badMainLoad']], [2, []]])
+  })
+
+  it('a header under rows that read as plans does not swallow them', () => {
+    const sheet = parseRows([['7001', '320', '7002', '270'], header, ['7003', '290', '7004', '260']])
+    expect(sheet.hadHeader).toBe(false)
+    expect(sheet.rows.map((r) => [r.line, r.problems.length > 0])).toEqual([[1, false], [2, true], [3, false]])
+  })
+
+  it('a note that says "main" further down is not a header', () => {
+    const sheet = parseRows([['ملاحظات عامة', 'نص'], ['Main feeder notes', 'x'], ['7001', '320']])
+    expect(sheet.hadHeader).toBe(false)
+  })
+
+  it('text and cells give the same rows', () => {
+    const cells = [header, ['7001', '320', '7002', '270'], ['', '', '', ''], ['7003', 'abc', '7004', '260']]
+    expect(parseRows(cells)).toEqual(parseSheet(cells.map((row) => row.join('\t')).join('\n')))
   })
 })
 

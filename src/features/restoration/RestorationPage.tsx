@@ -142,7 +142,7 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
   const dataActions: DataAction[] = isAdmin
     ? [
         { id: 'import', icon: 'layers', label: 'استيراد طبقات الخريطة', hint: 'ملفات Google Earth', onSelect: () => setDialog('import') },
-        ...(backupPlans.available ? [{ id: 'bulk', icon: 'table' as const, label: 'إدخال جماعي للخطط', hint: 'لصق من جدول أو ملف CSV', onSelect: () => setBulkOpen(true) }] : []),
+        ...(backupPlans.available ? [{ id: 'bulk', icon: 'table' as const, label: 'إدخال جماعي للخطط', hint: 'قالب Excel أو لصق من الجدول', onSelect: () => setBulkOpen(true) }] : []),
         { id: 'cleanup', icon: 'trash', label: 'حذف بيانات الشبكة التجريبية القديمة', hint: 'الشبكة المصطنعة السابقة فقط', danger: true, onSelect: () => setDialog('cleanup') },
       ]
     : []

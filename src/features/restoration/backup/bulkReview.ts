@@ -1,4 +1,3 @@
-import { linesToCsv } from '../exportCsv'
 import type { ParsedRow } from './bulkParse'
 import { placesOf, toPosition, type StationDirectory } from './directory'
 import { assessCase, summarize, type BackupCase, type BackupElement, type CaseResult, type ModelOptions } from './model'
@@ -80,14 +79,3 @@ export const savedTotals = (saved: BackupCase[], options: ModelOptions) => {
   const last = new Map(saved.map((c) => [c.id, c]))
   return summarize([...last.values()], () => 'all', options).total
 }
-
-const TEMPLATE_HEADER = ['الرئيسي', 'حمل الرئيسي', 'بديل ١', 'حمل ١', 'بديل ٢', 'حمل ٢', 'بديل ٣', 'حمل ٣', 'المستوى', 'الجهد', 'السعة', 'ملاحظة']
-const TEMPLATE_NOTE = 'مثال — احذف هذا السطر'
-
-/** Two made-up lines under the header: what a filled sheet looks like. */
-export const bulkTemplate = () =>
-  linesToCsv([
-    TEMPLATE_HEADER,
-    ['7001', 320, '7002', 270, '7003', 285, '7004', 260, 'محطة', 13.8, '', TEMPLATE_NOTE],
-    ['7005', 290, '7006', 250, '7007', 265, '', '', 'مغذي', 13.8, 400, TEMPLATE_NOTE],
-  ])

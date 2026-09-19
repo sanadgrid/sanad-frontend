@@ -495,6 +495,23 @@
   color: var(--rc-muted);
 }
 
+/* which sheet of the workbook the preview shows */
+.rc-bulk__sheet {
+  margin: 0;
+  font-size: 13px;
+  color: var(--rc-text-2);
+}
+
+.rc-bulk__sheet b {
+  color: var(--rc-heading);
+}
+
+.rc-bulk__sheet select {
+  width: auto;
+  max-width: min(320px, 60vw);
+  padding-block: 5px;
+}
+
 .rc-bulk__totals {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

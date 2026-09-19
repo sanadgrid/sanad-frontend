@@ -186,6 +186,11 @@ export function Dashboard(props: DashboardProps) {
   }
 
   const exportCsv = (cases: BackupCase[], name: string) => saveCsv(plansToCsv(cases, { ratingA }, net.monthDerating), `${name}-${sector.id}.csv`)
+  // what writes a workbook is fetched when one is asked for, not with the page
+  const exportXlsx = (cases: BackupCase[], name = 'خطط-التغذية-البديلة') =>
+    import('./exportXlsx')
+      .then((m) => m.savePlansXlsx(cases, { ratingA }, net.monthDerating, `${name}-${sector.id}.xlsx`))
+      .catch((error) => console.warn('excel export:', error))
   const assumed = { assumptions, ratingA, savedRatingA: net.savedRatingA, monthDerating: net.monthDerating }
   const showEmpty = !hasPlans && !plans.loading && !emptyDismissed && !plansOpen && !editor.draft
 
@@ -312,6 +317,7 @@ export function Dashboard(props: DashboardProps) {
           onDerating={(deratingOn) => setAssumptions((a) => ({ ...a, deratingOn }))}
           onSelect={(id, saved) => selectPlan(id, 'list', saved)}
           onExport={() => exportCsv(net.planRows.map((row) => row.plan), 'backup-plans')}
+          onExportExcel={() => void exportXlsx(net.planRows.map((row) => row.plan))}
           onBulk={() => onBulk(true)}
           onShowOnMap={() => setPlansOpen(false)}
           onPicked={framePicked}
@@ -346,7 +352,7 @@ export function Dashboard(props: DashboardProps) {
         listedCount={Math.min(PRIORITY_ROWS, net.visible.length)}
         visibleCount={net.visible.length}
         empty={!hasPlans}
-        onExport={() => exportCsv(net.visible.map((row) => row.plan), 'restoration-plans')}
+        onExport={() => void exportXlsx(net.visible.map((row) => row.plan), 'أولويات-التعزيز')}
         table={<PriorityTable rows={net.visible.slice(0, PRIORITY_ROWS)} selectedId={planId} onSelect={openPlan} />}
         methodology={<Methodology />}
       />

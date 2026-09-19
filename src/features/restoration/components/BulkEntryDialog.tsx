@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { Icon } from '../../../components/Icon'
-import { bulkTemplate } from '../backup/bulkReview'
 import type { StationDirectory } from '../backup/directory'
 import type { BackupCase, ModelOptions } from '../backup/model'
-import { saveCsv } from '../exportCsv'
+import { templateWorkbook } from '../backup/planXlsx'
+import { SheetFileError, type SheetFileFailure } from '../backup/xlsxRead'
+import { saveXlsx } from '../exportXlsx'
 import { fmt } from '../labels'
-import { readSheetFile, useBulkEntry } from '../useBulkEntry'
+import { readSheetFile, useBulkEntry, type BulkEntry } from '../useBulkEntry'
 import { BulkPreview } from './BulkPreview'
 
 interface BulkEntryDialogProps {
@@ -21,10 +22,41 @@ interface BulkEntryDialogProps {
 }
 
 const COLUMNS = 'الرئيسي · حمل الرئيسي · بديل ١ · حمل ١ · بديل ٢ · حمل ٢ · بديل ٣ · حمل ٣ …'
-const FILE_FAILED = 'تعذّرت قراءة الملف. احفظه من برنامج الجداول بصيغة CSV ثم حاول مرة أخرى.'
+// the file ending reads left to right inside the Arabic sentence
+const XLSX = '\u2066.xlsx\u2069'
+const FILE_PROBLEM: Record<SheetFileFailure, string> = {
+  saveAs: `تعذّرت قراءة هذا الملف. افتحه في Excel واحفظه من «حفظ باسم» بصيغة ${XLSX} ثم اختره مرة أخرى.`,
+  notSheet: `هذا الملف ليس جدولاً. اختر ملف Excel بصيغة ${XLSX} أو ملف CSV.`,
+  tooBig: 'الملف أكبر من 10 ميغابايت. انسخ أسطر الخطط إلى ملف Excel جديد ثم اختره.',
+  tooManyRows: 'في الورقة أكثر من 20,000 سطر. وزّعها على أكثر من ملف وأدخل كل ملف على حدة.',
+}
 const NOTHING_READ = 'لم يُعثر على أسطر. انسخ الخلايا من الجدول والصقها هنا.'
+const NOTHING_IN_FILE = 'لم يُعثر على أسطر في هذا الملف.'
+const TEMPLATE_NAME = 'نموذج-خطط-التغذية-البديلة.xlsx'
 
-/** Many plans at once: rows pasted from a spreadsheet, or a CSV file, checked on screen before one write saves them all. */
+/** Which sheet of the workbook the preview shows; with several that can hold plans, another may be chosen. */
+function SheetChoice({ book, onPick }: { book: NonNullable<BulkEntry['book']>; onPick: (index: number) => void }) {
+  if (book.sheets.length < 2)
+    return (
+      <p className="rc-bulk__sheet">
+        الورقة: <b>{book.sheets[book.chosen]?.name}</b>
+      </p>
+    )
+  return (
+    <label className="rc-select rc-select--inline rc-bulk__sheet">
+      <span>الورقة:</span>
+      <select value={book.chosen} onChange={(e) => onPick(Number(e.target.value))}>
+        {book.sheets.map((sheet, i) => (
+          <option key={i} value={i}>
+            {sheet.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+/** Many plans at once: an Excel or CSV file, or rows pasted from a spreadsheet, checked on screen before one write saves them all. */
 export function BulkEntryDialog({ sectorName, existing, directory, options, busy, onSave, onClose }: BulkEntryDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const entry = useBulkEntry(existing, directory, options)
@@ -41,14 +73,19 @@ export function BulkEntryDialog({ sectorName, existing, directory, options, busy
   const readFile = async (file: File | undefined) => {
     if (!file) return
     try {
-      const text = await readSheetFile(file)
-      entry.setText(text)
+      const read = await readSheetFile(file)
+      if (read.kind === 'book' && read.sheets.length === 0) return setProblem(NOTHING_IN_FILE)
       setProblem(null)
-      entry.check(text)
+      entry.checkFile(read)
     } catch (error) {
-      console.error('bulk entry:', error)
-      setProblem(FILE_FAILED)
+      console.warn('bulk entry:', error)
+      setProblem(FILE_PROBLEM[error instanceof SheetFileError ? error.reason : 'saveAs'])
     }
+  }
+  const dropped = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault()
+    setOver(false)
+    if (!entry.previewing && !busy) void readFile(event.dataTransfer.files[0])
   }
 
   const check = () => {
@@ -67,11 +104,20 @@ export function BulkEntryDialog({ sectorName, existing, directory, options, busy
         event.preventDefault()
         if (!busy) onClose()
       }}
+      // a file let go anywhere on the dialog is read, rather than opened in place of the page
+      onDragOver={(event) => {
+        event.preventDefault()
+        if (!entry.previewing) setOver(true)
+      }}
+      onDragLeave={(event) => event.currentTarget === event.target && setOver(false)}
+      onDrop={dropped}
     >
       <header className="rc-dialog__head">
         <div>
           <h2 id="rc-bulk-title">إدخال جماعي لخطط التغذية البديلة</h2>
-          <p>{sectorName} · الصق الأسطر من جدولك، أو اختر ملف CSV</p>
+          <p>
+            {sectorName} · اختر ملف <span lang="en">Excel</span>، أو الصق الأسطر من جدولك
+          </p>
         </div>
         <button className="rc-icon-btn" type="button" aria-label="إغلاق" disabled={busy} onClick={onClose}>
           <Icon name="close" size={18} />
@@ -81,7 +127,10 @@ export function BulkEntryDialog({ sectorName, existing, directory, options, busy
       <div className="rc-dialog__body">
         {entry.previewing ? (
           entry.reviewed.length > 0 ? (
-            <BulkPreview entry={entry} />
+            <>
+              {entry.book && <SheetChoice book={entry.book} onPick={entry.pickSheet} />}
+              <BulkPreview entry={entry} />
+            </>
           ) : (
             <p className="rc-import__error" role="alert">
               <Icon name="alert" size={16} />
@@ -106,28 +155,28 @@ export function BulkEntryDialog({ sectorName, existing, directory, options, busy
               placeholder={'7001\t320\t7002\t270\t7003\t285'}
               value={entry.text}
               onChange={(e) => entry.setText(e.target.value)}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setOver(true)
-              }}
-              onDragLeave={() => setOver(false)}
-              onDrop={(e) => {
-                e.preventDefault()
-                setOver(false)
-                void readFile(e.dataTransfer.files[0])
-              }}
             />
             <div className="rc-bulk__sources">
               <label className="rc-btn">
                 <Icon name="file" size={15} />
-                اختيار ملف <span lang="en">CSV</span>
-                <input type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" onChange={(e) => void readFile(e.target.files?.[0])} />
+                اختيار ملف <span lang="en">Excel</span>
+                <input
+                  type="file"
+                  accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                  onChange={(e) => {
+                    void readFile(e.target.files?.[0])
+                    // the same file can be chosen again after it is corrected
+                    e.target.value = ''
+                  }}
+                />
               </label>
-              <button className="rc-link" type="button" onClick={() => saveCsv(bulkTemplate(), 'backup-plans-template.csv')}>
+              <button className="rc-link" type="button" onClick={() => saveXlsx(templateWorkbook(), TEMPLATE_NAME)}>
                 <Icon name="download" size={13} />
-                تنزيل نموذج للتعبئة
+                تنزيل نموذج <span lang="en">Excel</span> للتعبئة
               </button>
-              <small>يمكن أيضاً سحب الملف وإفلاته فوق المربع. ملف الجداول يُحفظ أولاً بصيغة CSV.</small>
+              <small>
+                يمكنك سحب ملف <span lang="en">Excel</span> وإفلاته هنا، أو لصق الصفوف منسوخة من الجدول مباشرة. تُقبل أيضاً ملفات <span lang="en">CSV</span>.
+              </small>
             </div>
             {problem && (
               <p className="rc-import__error" role="alert">
