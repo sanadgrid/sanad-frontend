@@ -8,6 +8,8 @@ import { FeederList } from './FeederCard'
 
 interface StationDetailProps {
   row: StationRow | null
+  /** The station belongs to the synthetic training network: its panel says so. */
+  synthetic?: boolean
   /** Arabic name of the station's operating area. */
   areaName: string
   feeders: FeederRow[]
@@ -29,7 +31,7 @@ const minutes = (value: number) => (
   </span>
 )
 
-export function StationDetail({ row, areaName, feeders, feederCard, onFeeder, onClose }: StationDetailProps) {
+export function StationDetail({ row, synthetic, areaName, feeders, feederCard, onFeeder, onClose }: StationDetailProps) {
   // nothing selected, nothing shown: the map keeps the room
   if (!row) return null
 
@@ -49,6 +51,11 @@ export function StationDetail({ row, areaName, feeders, feederCard, onFeeder, on
         <div>
           <h2 className="rc-detail__code num" dir="ltr">
             {station.code}
+            {synthetic && (
+              <small className="rc-demo-chip" dir="rtl">
+                تجريبي
+              </small>
+            )}
           </h2>
           <p>
             {station.district} · {areaName}

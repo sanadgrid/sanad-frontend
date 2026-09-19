@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
 import { fmt } from '../labels'
+import { NO_NETWORK } from './KpiCards'
 
 interface BottomSheetProps {
   open: boolean
@@ -8,6 +9,8 @@ interface BottomSheetProps {
   /** Rows in the table, and how many stations match the filters (the CSV holds all of them). */
   listedCount: number
   visibleCount: number
+  /** No network is on the map: nothing to rank. */
+  empty?: boolean
   onExport: () => void
   table: ReactNode
   methodology: ReactNode
@@ -21,8 +24,19 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 /** Folded, it is a handle at the foot of the map; open, the table scrolls inside it. */
-export function BottomSheet({ open, onToggle, listedCount, visibleCount, onExport, table, methodology }: BottomSheetProps) {
+export function BottomSheet({ open, onToggle, listedCount, visibleCount, empty, onExport, table, methodology }: BottomSheetProps) {
   const [tab, setTab] = useState<Tab>('priority')
+
+  if (empty)
+    return (
+      <section className="rc-float rc-sheet rc-sheet--empty" aria-label="أولويات التعزيز">
+        <p>
+          <Icon name="chart" size={16} />
+          <b>أولويات التعزيز</b>
+          <span>{NO_NETWORK}</span>
+        </p>
+      </section>
+    )
 
   return (
     <section className={`rc-float rc-sheet${open ? ' is-open' : ''}`} aria-label="أولويات التعزيز ومنهجية الحساب">

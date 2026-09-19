@@ -22,15 +22,30 @@ const positive = (value: unknown): number | undefined =>
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '')
 
+/** `[lng, lat]` of a point on the globe, or nothing: a place that cannot be drawn is no place. */
+function positionOf(value: unknown): [number, number] | undefined {
+  if (!Array.isArray(value) || value.length !== 2) return undefined
+  const [lng, lat] = value as unknown[]
+  const valid = typeof lng === 'number' && typeof lat === 'number' && Math.abs(lng) <= 180 && Math.abs(lat) <= 90
+  return valid ? [lng, lat] : undefined
+}
+
 function elementOf(raw: unknown): BackupElement {
-  const { no, loadA, ratingA } = (raw ?? {}) as Record<string, unknown>
+  const { no, loadA, ratingA, at, layerId } = (raw ?? {}) as Record<string, unknown>
   const rating = positive(ratingA)
-  return { no: text(no), loadA: positive(loadA) ?? 0, ...(rating && { ratingA: rating }) }
+  const place = positionOf(at)
+  return {
+    no: text(no),
+    loadA: positive(loadA) ?? 0,
+    ...(rating && { ratingA: rating }),
+    // the layer only says where the place was chosen: without a place it says nothing
+    ...(place && { at: place, ...(text(layerId) && { layerId: text(layerId) }) }),
+  }
 }
 
 /** A case as the page relies on it, whatever was stored: a hand-edited document must not break the list. */
 export function caseOf(raw: unknown): BackupCase | null {
-  const { id, level, voltageKv, ratingA, main, backups, note } = (raw ?? {}) as Record<string, unknown>
+  const { id, level, voltageKv, ratingA, main, backups, note, demo } = (raw ?? {}) as Record<string, unknown>
   if (!text(id)) return null
   const rating = positive(ratingA)
   return {
@@ -41,6 +56,7 @@ export function caseOf(raw: unknown): BackupCase | null {
     main: elementOf(main),
     backups: Array.isArray(backups) ? backups.map(elementOf).filter((b) => b.no) : [],
     ...(text(note) && { note: text(note) }),
+    ...(demo === true && { demo: true }),
   }
 }
 

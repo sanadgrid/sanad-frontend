@@ -8,6 +8,8 @@ import type { Theme } from '../useTheme'
 interface TopBarProps {
   /** `null` while the network is still loading. */
   source: NetworkSource | null
+  /** The synthetic training network is what the map shows. */
+  synthetic: boolean
   sectors: SectorSummary[]
   sectorId: string
   /** `null` only in the test build that has nobody to sign in. */
@@ -28,6 +30,7 @@ interface TopBarProps {
 
 export function TopBar({
   source,
+  synthetic,
   sectors,
   sectorId,
   user,
@@ -63,6 +66,7 @@ export function TopBar({
             {source === 'demo' ? 'بيانات عامة تجريبية' : 'بيانات مباشرة'}
           </span>
         )}
+        {synthetic && <span className="rc-demo-chip">تجريبي</span>}
 
         <label className="rc-select rc-select--inline">
           <span>القطاع</span>

@@ -1,6 +1,7 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, type RefObject } from 'react'
+import type { StationPoint } from '../backup/directory'
 import type { Layers } from '../filters'
 import { layerColor } from '../layerPalette'
 import { themeColors, type MapColors } from '../mapTheme'
@@ -21,6 +22,7 @@ import {
 } from './importedLayer'
 import { fitBbox, fitPoints, flyToPoint, followClearArea, panTo, patientFit, type MapView, type Place } from './mapView'
 import { drawNetwork, LABEL_PANE, LABEL_PANE_Z, type MapStation, type MapTie, type Themed } from './networkLayers'
+import { drawPickLayer, PICK_PANE, PICK_PANE_Z, pointOut, type PickLayer } from './pickLayer'
 import { drawPlans, PLAN_PANE, PLAN_PANE_Z, type PlanDrawing } from './planLinks'
 
 interface NetworkMapProps {
@@ -40,9 +42,18 @@ interface NetworkMapProps {
   highlightTies: ReadonlySet<string>
   /** Backup plans to draw, between the imported layers and the network. */
   plans: PlanDrawing[]
+  /** What the map keeps in view while the network has no stations to show: a plan, or the imported stations. */
+  frame: LatLng[]
+  /** Set while the stations of a plan are being clicked on the map: every station that can be. */
+  pickable: StationPoint[] | null
+  /** Of those, the backups the plan holds (by `pointKey`): their badge stands in for their square. */
+  pickedBackups: string[]
+  /** A place to point out: the option of a duplicate number under the pointer. */
+  pointedOut: LatLng | null
   theme: Theme
   onSelect: (stationId: string) => void
   onSelectPlan: (planId: string) => void
+  onPick: (point: StationPoint) => void
 }
 
 interface DrawnLayer extends DrawnImportedLayer {
@@ -88,9 +99,14 @@ export function NetworkMap({
   selectedId,
   highlightTies,
   plans,
+  frame,
+  pickable,
+  pickedBackups,
+  pointedOut,
   theme,
   onSelect,
   onSelectPlan,
+  onPick,
 }: NetworkMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
@@ -100,15 +116,22 @@ export function NetworkMap({
   const canvas = useRef<L.Renderer | null>(null)
   const drawn = useRef(new Map<string, DrawnLayer>())
   const pointed = useRef<Pointed | null>(null)
+  const pickLayer = useRef<PickLayer | null>(null)
   // the latest values, for handlers and for views asked long after the markers were drawn
   const select = useRef(onSelect)
   const selectPlan = useRef(onSelectPlan)
+  const pick = useRef(onPick)
+  // what a fitted view frames: the network's stations, or what stands in for them
+  const networkShown = stations.length > 0
+  const framedPoints = useRef(frame)
   const shown = useRef(stations)
   useEffect(() => {
     select.current = onSelect
     selectPlan.current = onSelectPlan
+    pick.current = onPick
     shown.current = stations
-  }, [onSelect, onSelectPlan, stations])
+    framedPoints.current = networkShown ? stations.map((s) => s.location) : frame
+  }, [onSelect, onSelectPlan, onPick, stations, networkShown, frame])
 
   // Until the user moves the map himself, it keeps the stations framed in whatever
   // room the panels leave: opening the filters slides the network aside, not under them.
@@ -139,6 +162,7 @@ export function NetworkMap({
     instance.attributionControl.setPrefix(false)
     instance.createPane(IMPORTED_PANE).style.zIndex = String(IMPORTED_PANE_Z)
     instance.createPane(PLAN_PANE).style.zIndex = String(PLAN_PANE_Z)
+    instance.createPane(PICK_PANE).style.zIndex = String(PICK_PANE_Z)
     const labels = instance.createPane(LABEL_PANE)
     labels.style.zIndex = String(LABEL_PANE_Z)
     labels.style.pointerEvents = 'none'
@@ -164,7 +188,7 @@ export function NetworkMap({
     observer.observe(element)
     const clear = clearArea.current
     const reframe = patientFit(instance, () => {
-      if (framed.current) fitPoints(instance, shown.current.map((s) => s.location), clear)
+      if (framed.current) fitPoints(instance, framedPoints.current, clear)
     })
     // after the observer above: Leaflet must know its new size before it fits anything into it
     const unfollow = clear ? followClearArea(instance, clear, reframe) : undefined
@@ -178,6 +202,7 @@ export function NetworkMap({
       overlay.current = null
       planLinks.current = null
       canvas.current = null
+      pickLayer.current = null
       importedLayers.clear()
       pointed.current = null
     }
@@ -189,13 +214,16 @@ export function NetworkMap({
     const instance = map.current
     if (!instance) return
     instance.setView([center.lat, center.lng], zoom, { animate: false })
-    fitPoints(
-      instance,
-      shown.current.map((s) => s.location),
-      clearArea.current,
-      false,
-    )
+    fitPoints(instance, framedPoints.current, clearArea.current, false)
   }, [center.lat, center.lng, zoom, clearArea])
+
+  // Without a network on the map, what is framed arrives later than the map does
+  // (the imported stations, then a plan): the view follows it until the user moves
+  // the map. A filter never comes through here — it changes neither of the two.
+  useEffect(() => {
+    const instance = map.current
+    if (instance && framed.current) fitPoints(instance, framedPoints.current, clearArea.current, false)
+  }, [networkShown, frame, clearArea])
 
   useEffect(() => {
     const group = overlay.current
@@ -217,6 +245,36 @@ export function NetworkMap({
   useEffect(() => {
     if (planLinks.current) drawPlans(planLinks.current, plans, (id) => selectPlan.current(id))
   }, [plans])
+
+  // Picking: every station of the directory on a canvas of its own, there only while it lasts.
+  useEffect(() => {
+    const instance = map.current
+    if (!instance || !pickable) return
+    const layer = drawPickLayer(instance, pickable, (point) => pick.current(point))
+    pickLayer.current = layer
+    return () => {
+      layer.remove()
+      pickLayer.current = null
+    }
+  }, [pickable])
+
+  useEffect(() => {
+    pickLayer.current?.hide(pickedBackups)
+  }, [pickable, pickedBackups])
+
+  useEffect(() => {
+    const { pickable: fill, markerStroke: rim } = themeColors(theme)
+    pickLayer.current?.paint({ fill, rim })
+  }, [pickable, theme])
+
+  useEffect(() => {
+    const instance = map.current
+    if (!instance || !pointedOut) return
+    const ring = pointOut(pointedOut).addTo(instance)
+    return () => {
+      ring.remove()
+    }
+  }, [pointedOut])
 
   // Imported layers are kept apart from the network overlay: a filter or a
   // selection redraws the stations, never these, and a theme switch only restyles them.
@@ -260,13 +318,11 @@ export function NetworkMap({
     if (!instance || !view) return
     if (view.kind === 'fit') {
       framed.current = true
-      fitPoints(
-        instance,
-        shown.current.map((s) => s.location),
-        clearArea.current,
-      )
+      fitPoints(instance, framedPoints.current, clearArea.current)
       return
     }
+    // pointing a place out never takes the map away from the user for good
+    if (view.kind === 'reveal') return void panTo(instance, view.at, clearArea.current, true)
     // a framed map moves itself when the panel of the clicked station opens
     if (view.kind === 'station' && view.whenCovered && framed.current) return
     const station = view.kind === 'station' && shown.current.find((s) => s.id === view.id)

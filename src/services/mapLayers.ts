@@ -292,11 +292,51 @@ export async function saveMapLayer(
   return layerId
 }
 
-export async function deleteMapLayer(sectorId: string, layerId: string): Promise<void> {
-  if (!isFirebaseConfigured) throw new Error('map layers: the database is not configured')
+/** The parts of a layer, then its descriptor; the index is the caller's to update. */
+async function removeLayerDocs(sectorId: string, layerId: string): Promise<void> {
   const descriptor: Write = { ref: doc(db, LAYERS, layerId), data: null, bytes: WRITE_OVERHEAD_BYTES }
   // the descriptor goes last: if this fails half-way the layer is still listed and can be deleted again
   await commit([...(await removalsOf(sectorId, layerId)), descriptor])
   features.delete(layerId)
+}
+
+export async function deleteMapLayer(sectorId: string, layerId: string): Promise<void> {
+  if (!isFirebaseConfigured) throw new Error('map layers: the database is not configured')
+  await removeLayerDocs(sectorId, layerId)
   await updateIndex(sectorId, [{ remove: layerId }])
+}
+
+export interface RemovedLayers {
+  removed: string[]
+  /** The layer that could not be deleted; the ones after it were not tried. */
+  failed: string | null
+}
+
+/**
+ * Several layers, one after the other, stopping at the first that fails. The
+ * index is written once, at the end, for those that went — so a run cut short
+ * still leaves the list true. Rejects only when that one write fails: the
+ * layers are then gone but still listed, and deleting them again clears them.
+ */
+export async function deleteMapLayers(
+  sectorId: string,
+  layerIds: string[],
+  onProgress: (done: number, total: number) => void = () => {},
+): Promise<RemovedLayers> {
+  if (!isFirebaseConfigured) throw new Error('map layers: the database is not configured')
+  const removed: string[] = []
+  let failed: string | null = null
+  for (const layerId of layerIds) {
+    try {
+      await removeLayerDocs(sectorId, layerId)
+    } catch (error) {
+      console.error('map layers: a layer could not be deleted —', error)
+      failed = layerId
+      break
+    }
+    removed.push(layerId)
+    onProgress(removed.length, layerIds.length)
+  }
+  if (removed.length > 0) await updateIndex(sectorId, removed.map((layerId) => ({ remove: layerId })))
+  return { removed, failed }
 }

@@ -3,6 +3,7 @@ import { Icon } from '../../../components/Icon'
 import { normalizeQuery, searchStations, stationNameOf, type StationHit } from '../import/stations'
 import { featureCount, type Bbox } from '../import/types'
 import { fmt } from '../labels'
+import { findDuplicateLayers } from '../layerDuplicates'
 import { swatchStyle } from '../layerPalette'
 import type { ImportedLayers } from '../useMapLayers'
 import { LayerContents } from './LayerContents'
@@ -17,6 +18,8 @@ interface ImportedLayersListProps {
   /** Show one station, line or area of a layer on the map. */
   onPoint: (layerId: string, place: Place) => void
   onDelete: (layerId: string) => void
+  /** Twin layers of one imported file, to be deleted in one go. */
+  onDeleteMany: (layerIds: string[]) => void
 }
 
 // more than this and the number typed is too short to be looking for one station
@@ -26,13 +29,23 @@ const placeKey = (layerId: string, place: Place) => `${layerId}|${place.at.join(
 // the index knows a station's name and place; the rest of its popup comes with the layer
 const placeOfHit = ({ station }: StationHit): Place => ({ at: station.c, text: { n: stationNameOf(station) }, partial: true })
 
-export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint, onDelete }: ImportedLayersListProps) {
+// "3 طبقات", "11 طبقة": the noun follows the number
+const layersPhrase = (count: number) =>
+  count === 1 ? 'توجد طبقة مكررة واحدة' : count === 2 ? 'توجد طبقتان مكررتان' : count <= 10 ? `توجد ${fmt(count)} طبقات مكررة` : `توجد ${fmt(count)} طبقة مكررة`
+
+export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint, onDelete, onDeleteMany }: ImportedLayersListProps) {
   const { layers, active, loading, failed, contents } = imported
   // the layer whose deletion is waiting for a second, explicit click
   const [confirming, setConfirming] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [current, setCurrent] = useState<string | null>(null)
+  const [confirmingTwins, setConfirmingTwins] = useState(false)
+
+  // Twins of one source file, told from what the list already says — nothing is
+  // read. Deleting is an admin's: nobody else is shown any of this.
+  const twins = useMemo(() => (canDelete ? findDuplicateLayers(layers) : []), [canDelete, layers])
+  const doomed = useMemo(() => new Set(twins.flatMap((group) => group.remove.map((layer) => layer.id))), [twins])
 
   const wanted = normalizeQuery(query)
   const listed = useMemo(
@@ -42,6 +55,18 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
   // from the lists the index carries: typing reads nothing
   const found = useMemo(() => searchStations(layers, wanted, MAX_HITS), [layers, wanted])
   const colors = useMemo(() => new Map(layers.map((layer) => [layer.id, layer.style.color])), [layers])
+
+  // The master checkbox answers for the layers listed right now — the matches of a
+  // search, or all of them. A layer with nothing to draw is not one of them.
+  const selectable = useMemo(() => listed.filter((layer) => featureCount(layer.counts) > 0).map((layer) => layer.id), [listed])
+  const shown = selectable.filter((id) => active.has(id)).length
+  const allShown = selectable.length > 0 && shown === selectable.length
+  const toggleAll = () => {
+    // while they are still arriving, a second click calls off the rest: what has arrived stays
+    if (imported.bulk) imported.hideMany(selectable.filter((id) => loading.has(id)))
+    else if (allShown) imported.hideMany(selectable)
+    else imported.showMany(selectable)
+  }
 
   const point = (layerId: string, place: Place) => {
     setCurrent(placeKey(layerId, place))
@@ -61,12 +86,64 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
         <span className="rc-field__label">
           طبقات مستوردة <span className="num">({fmt(layers.length)})</span>
         </span>
-        {active.size > 0 && (
-          <button className="rc-link" type="button" onClick={imported.hideAll}>
-            إخفاء الكل
-          </button>
-        )}
       </div>
+
+      {doomed.size > 0 && !imported.removing && (
+        <div className="rc-imported__twins" role={confirmingTwins ? 'alert' : undefined}>
+          <p>
+            <Icon name="alert" size={14} />
+            {layersPhrase(doomed.size)}
+            {!confirmingTwins && (
+              <button className="rc-link" type="button" disabled={busy} onClick={() => setConfirmingTwins(true)}>
+                حذف المكرر
+              </button>
+            )}
+          </p>
+          {confirmingTwins && (
+            <>
+              <ul>
+                {twins.map((group) => (
+                  <li key={group.keep.id}>
+                    <span>
+                      تبقى <bdi>{group.keep.name}</bdi>
+                    </span>
+                    {group.remove.map((layer) => (
+                      <span key={layer.id} className="rc-imported__doomed">
+                        تُحذف <bdi>{layer.name}</bdi>
+                      </span>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+              <p>
+                <span>الحذف نهائي، والطبقة الباقية لا تتأثر.</span>
+                <button
+                  className="rc-link rc-link--danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setConfirmingTwins(false)
+                    onDeleteMany([...doomed])
+                  }}
+                >
+                  حذف <span className="num">{fmt(doomed.size)}</span>
+                </button>
+                <button className="rc-link" type="button" onClick={() => setConfirmingTwins(false)}>
+                  تراجع
+                </button>
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
+      {imported.removing && (
+        <p className="rc-imported__status" role="status">
+          <span className="rc-spinner" aria-hidden="true" />
+          جارٍ حذف الطبقات المكررة…{' '}
+          <bdi className="num" dir="ltr">{`${fmt(imported.removing.done)} / ${fmt(imported.removing.total)}`}</bdi>
+        </p>
+      )}
 
       {imported.indexing && (
         <p className="rc-imported__status" role="status">
@@ -132,6 +209,35 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
         <span className="rc-imported__caption">
           طبقات مطابقة <span className="num">({fmt(listed.length)})</span>
         </span>
+      )}
+
+      {selectable.length > 0 && (
+        <label className="rc-check rc-imported__all" title={allShown ? 'إلغاء تحديد الكل' : 'تحديد الكل'}>
+          <input
+            type="checkbox"
+            aria-label={allShown ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+            checked={allShown}
+            ref={(box) => {
+              // some, not all: the dash
+              if (box) box.indeterminate = shown > 0 && !allShown
+            }}
+            onChange={toggleAll}
+          />
+          <span>
+            تحديد الكل <span className="num">({fmt(selectable.length)})</span>
+          </span>
+        </label>
+      )}
+
+      {imported.bulk && (
+        <p className="rc-imported__status" role="status">
+          <span className="rc-spinner" aria-hidden="true" />
+          جارٍ تحميل الطبقات…{' '}
+          <bdi className="num" dir="ltr">{`${fmt(imported.bulk.done)} / ${fmt(imported.bulk.total)}`}</bdi>
+          <button className="rc-link" type="button" onClick={toggleAll}>
+            إيقاف
+          </button>
+        </p>
       )}
 
       <ul className="rc-imported__list">
@@ -207,7 +313,8 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
                 )}
               </div>
               <div className="rc-imported__meta">
-                {loading.has(layer.id) && active.has(layer.id) ? (
+                {/* many at once are told in one line above, not a hundred spinners */}
+                {loading.has(layer.id) && active.has(layer.id) && !imported.bulk ? (
                   <>
                     <span className="rc-spinner" role="status" aria-label="جارٍ تحميل الطبقة" />
                     جارٍ التحميل…
@@ -224,6 +331,7 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
                     <span className="num">{fmt(stations)}</span> محطة
                   </span>
                 )}
+                {doomed.has(layer.id) && <span className="rc-imported__chip rc-imported__chip--twin">مكررة</span>}
               </div>
               {open && (
                 <LayerContents

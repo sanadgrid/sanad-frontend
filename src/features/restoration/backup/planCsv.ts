@@ -18,7 +18,7 @@ export function plansToCsv(cases: BackupCase[], options: ModelOptions, derating:
     'level', 'voltage_kv', 'main_no', 'main_load_a', 'main_load_mva', 'rating_a', 'backups', 'total_spare_a',
     'restorable_a', 'unrestorable_a', 'restorable_mva', 'unrestorable_mva', 'ratio_pct', 'status',
     'derating', 'derated_ratio_pct', 'derated_unrestorable_a', 'derated_status',
-    ...backupHeaders, 'note',
+    ...backupHeaders, 'demo', 'note',
   ]
   const lines = cases.map((c) => {
     const r = assessCase(c, options)
@@ -31,7 +31,7 @@ export function plansToCsv(cases: BackupCase[], options: ModelOptions, derating:
       c.level, c.voltageKv, c.main.no, round(r.loadA), round(r.loadMva, 2), c.ratingA ?? options.ratingA ?? '', c.backups.length, round(r.totalSpareA),
       round(r.restorableA), round(r.unrestorableA), round(r.restorableMva, 2), round(r.unrestorableMva, 2), pct(r.ratio), r.status,
       derating, pct(derated.ratio), round(derated.unrestorableA), derated.status,
-      ...backups, c.note ?? '',
+      ...backups, c.demo ? 'yes' : '', c.note ?? '',
     ]
   })
   return linesToCsv([header, ...lines])

@@ -44,6 +44,7 @@ export function StationNoField({ label, value, directory, onChange }: StationNoF
               <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={() => onChange(station.no)}>
                 <b className="num">{station.no}</b>
                 {station.name !== `S/S ${station.no}` && <bdi>{station.name}</bdi>}
+                {station.points.length > 1 && <small dir="rtl">{station.points.length} مواقع</small>}
               </button>
             </li>
           ))}

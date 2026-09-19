@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
-import { locate, type StationDirectory } from '../backup/directory'
+import { locate, placeOf, type StationDirectory } from '../backup/directory'
 import { ratioLabel } from '../backup/format'
 import type { BackupCase, CaseResult } from '../backup/model'
 import { fmt } from '../labels'
@@ -59,7 +59,7 @@ interface PlanDetailProps {
 export function PlanDetail(props: PlanDetailProps) {
   const { plan, result, ratingA, directory, canEdit, busy, onBack, onEdit, onDelete, onShowOnMap } = props
   const [confirming, setConfirming] = useState(false)
-  const missing = [plan.main, ...plan.backups].filter((e) => !locate(directory, e.no)).map((e) => e.no)
+  const missing = [plan.main, ...plan.backups].filter((e) => !placeOf(directory, e)).map((e) => e.no)
   const names = plan.backups.map((b) => {
     const station = locate(directory, b.no)
     return station && station.name !== `S/S ${station.no}` ? station.name : undefined
@@ -108,6 +108,7 @@ export function PlanDetail(props: PlanDetailProps) {
           <bdi className="num" dir="ltr">
             {plan.main.no}
           </bdi>
+          {plan.demo && <small className="rc-demo-chip">تجريبي</small>}
         </h3>
         <p>
           <span className="num" dir="ltr">

@@ -1,4 +1,5 @@
 import type { Status } from '../engine'
+import type { Position } from '../import/types'
 import { ampsToMva } from './units'
 
 // The operations team's own method, as they work it out by hand: a main element
@@ -13,6 +14,10 @@ export interface BackupElement {
   loadA: number
   /** Only when this element's rating differs from the case's. */
   ratingA?: number
+  /** The very point that was chosen: a number may stand at several places. Absent, the station directory decides. */
+  at?: Position
+  /** The imported layer the point was chosen in. */
+  layerId?: string
 }
 
 export interface BackupCase {
@@ -25,6 +30,8 @@ export interface BackupCase {
   /** In the order they are called on: first backup, second backup, … */
   backups: BackupElement[]
   note?: string
+  /** Made for a presentation, with assumed loads: said wherever the case is shown. */
+  demo?: boolean
 }
 
 export interface ModelOptions {

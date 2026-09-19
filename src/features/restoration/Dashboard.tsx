@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
-import { buildDirectory, locate } from './backup/directory'
+import { allPoints, buildDirectory, directoryBounds, locate, placeOf, toLatLng } from './backup/directory'
+import { toCase } from './backup/draft'
 import { feederCase, stationFeeders } from './backup/fromNetwork'
 import { assessCase, type BackupCase } from './backup/model'
 import { plansToCsv } from './backup/planCsv'
@@ -17,6 +18,7 @@ import type { MapView, Place } from './components/mapView'
 import { Methodology } from './components/Methodology'
 import { NetworkMap } from './components/NetworkMap'
 import type { MapStation, MapTie } from './components/networkLayers'
+import { pointKey } from './components/pickLayer'
 import type { PlanDrawing } from './components/planLinks'
 import { PriorityTable } from './components/PriorityTable'
 import { StationDetail } from './components/StationDetail'
@@ -30,6 +32,7 @@ import type { BackupPlans } from './useBackupPlans'
 import type { Basemap } from './useBasemap'
 import type { ImportedLayers } from './useMapLayers'
 import { useMediaQuery, WIDE_SCREEN } from './useMediaQuery'
+import { usePlanEditor } from './usePlanEditor'
 import { useRoom } from './useRoom'
 import type { Theme } from './useTheme'
 
@@ -39,11 +42,15 @@ interface DashboardProps {
   imported: ImportedLayers
   plans: BackupPlans
   basemap: Basemap
+  /** Whether the synthetic training network is drawn; only asked of a network that is one. */
+  demoNetwork: boolean
   isAdmin: boolean
   /** Something is being written; destructive buttons wait. */
   busy: boolean
   onBasemap: (basemap: Basemap) => void
+  onDemoNetwork: (shown: boolean) => void
   onDeleteLayer: (layerId: string) => void
+  onDeleteLayers: (layerIds: string[]) => void
   /** These resolve to whether the change was written. */
   onSavePlan: (saved: BackupCase) => Promise<boolean>
   onDeletePlan: (caseId: string) => Promise<boolean>
@@ -58,6 +65,7 @@ const PRIORITY_ROWS = 8
 const LEGEND_ROOM = { width: 720, height: 460 }
 const NO_TIES: ReadonlySet<string> = new Set()
 const NO_PLANS: PlanDrawing[] = []
+const NO_KEYS: string[] = []
 
 export function Dashboard(props: DashboardProps) {
   const { network, theme, imported, plans, basemap, isAdmin, busy, onDeleteLayer } = props
@@ -83,12 +91,18 @@ export function Dashboard(props: DashboardProps) {
   // a fresh object every time, so asking for the same view twice moves the map twice
   const [view, setView] = useState<MapView | null>(null)
   const clearArea = useRef<HTMLDivElement>(null)
+  const mapSection = useRef<HTMLElement>(null)
+  const editor = usePlanEditor()
   // open by itself only where the map is fitted around the panels; on a scrolling page it would sit on stations
   const roomy = useRoom(clearArea, LEGEND_ROOM.width, LEGEND_ROOM.height)
   // …and while a backup plan is on the map, whose colours are not the legend's
   const legendOpen = roomy && wide ? (legendChoice ?? !plansOpen) : legendChoice === true
 
   const { sector } = network
+  // A public network is the synthetic one, kept for training: it is drawn only when
+  // asked for. Without it the page is the imported layers and the backup plans.
+  const synthetic = sector.visibility === 'public'
+  const networkShown = !synthetic || props.demoNetwork
   const assessments = useMemo(() => assessNetwork(network, conditions), [network, conditions])
   const bounds = useMemo(() => boundsOf(network), [network])
 
@@ -100,7 +114,7 @@ export function Dashboard(props: DashboardProps) {
       }),
     [network, assessments],
   )
-  const visible = useMemo(() => rows.filter((row) => matches(row, filters)), [rows, filters])
+  const visible = useMemo(() => (networkShown ? rows.filter((row) => matches(row, filters)) : []), [networkShown, rows, filters])
   const summary = useMemo(() => summarize(visible), [visible])
   const priority = useMemo(() => byPriority(visible).slice(0, PRIORITY_ROWS), [visible])
 
@@ -169,21 +183,45 @@ export function Dashboard(props: DashboardProps) {
     [plans.plan, planRating, periodDerating],
   )
   const plansShown = plans.available && (planId !== null || showAllPlans)
+  // The plan being written is drawn as it is typed or clicked, alone. An element
+  // stands at the place it names, else where the directory first finds its number.
+  const draft = editor.draft
   const planDrawings = useMemo(() => {
-    if (!plansShown) return NO_PLANS
-    return planRows.flatMap(({ plan, plain, derated }): PlanDrawing[] => {
-      if (!showAllPlans && plan.id !== planId) return []
-      const main = locate(directory, plan.main.no)
+    const drawing = (plan: BackupCase, result: PlanRow['plain'], selected: boolean, quiet = false): PlanDrawing[] => {
+      const main = placeOf(directory, plan.main)
       if (!main) return []
-      const result = plansDerated ? derated : plain
       const links = plan.backups.flatMap((backup, order) => {
-        const at = locate(directory, backup.no)?.at
+        const at = placeOf(directory, backup)
         const { transferA, level } = result.transfers[order]
         return at ? [{ order, no: backup.no, at, transferA, level }] : []
       })
-      return [{ id: plan.id, main: { no: plan.main.no, at: main.at }, links, selected: plan.id === planId }]
-    })
-  }, [plansShown, planRows, showAllPlans, planId, directory, plansDerated])
+      return [{ id: plan.id, main: { no: plan.main.no, at: main }, links, selected, quiet }]
+    }
+    if (draft) {
+      const written = toCase(draft)
+      return drawing(written, assessCase(written, { ratingA: planRating, derating: plansDerated ? periodDerating : 1 }), true, written.main.loadA === 0)
+    }
+    if (!plansShown) return NO_PLANS
+    return planRows.flatMap(({ plan, plain, derated }) =>
+      showAllPlans || plan.id === planId ? drawing(plan, plansDerated ? derated : plain, plan.id === planId) : [],
+    )
+  }, [draft, plansShown, planRows, showAllPlans, planId, directory, plansDerated, planRating, periodDerating])
+
+  // while stations are clicked into the plan: every station of the directory, and which of them are its backups
+  const pickable = useMemo(() => (editor.picking ? allPoints(directory) : null), [editor.picking, directory])
+  const pickedBackups = useMemo(
+    () => (draft && editor.picking ? draft.backups.flatMap((row) => (row.at ? [pointKey({ no: row.no.trim(), at: toLatLng(row.at) })] : [])) : NO_KEYS),
+    [draft, editor.picking],
+  )
+
+  // What the map frames when the network is not on it: the plan being read, else
+  // the imported stations — places the page already holds, so framing reads nothing.
+  // Never the plan being written: the map must hold still while it is clicked on.
+  const frame = useMemo(() => {
+    const read = planRows.find((row) => row.plan.id === planId)?.plan
+    const points = read ? [read.main, ...read.backups].flatMap((e) => placeOf(directory, e) ?? []) : []
+    return points.length > 0 ? points : (directoryBounds(directory) ?? [])
+  }, [planRows, planId, directory])
   const areaName = sector.areas.find((a) => a.id === selected?.station.areaId)?.nameAr ?? selected?.station.areaId ?? ''
   const periodLabel = conditions.period === 'forecast' ? FORECAST_LABEL : MONTHS_AR[conditions.period]
   const scenarioLabel = conditions.scenario === 'peak' ? 'الحمل الذروي' : 'الحالة العادية'
@@ -194,6 +232,7 @@ export function Dashboard(props: DashboardProps) {
   // On a wide screen the panel is what the map shows: closing it clears the map of it.
   const closePlans = () => {
     setPlansOpen(false)
+    editor.close()
     if (!wide) return
     setPlanId(null)
     setShowAllPlans(false)
@@ -236,11 +275,33 @@ export function Dashboard(props: DashboardProps) {
     setPlanId(id)
     const plan = saved ?? planRows.find((row) => row.plan.id === id)?.plan
     if (!plan) return
-    const found = [plan.main, ...plan.backups].flatMap((e) => locate(directory, e.no) ?? [])
-    const shown = (station: (typeof found)[number]) => station.layerIds.some((layerId) => imported.active.has(layerId))
-    for (const layerId of new Set(found.filter((station) => !shown(station)).map((station) => station.layerIds[0]))) imported.toggle(layerId, true)
-    if (found.length > 0) setView({ kind: 'points', points: found.map((station): LatLng => station.at) })
+    const elements = [plan.main, ...plan.backups]
+    // the layer an element was chosen in, while it exists; else every layer that lists its number
+    const layersOf = (e: (typeof elements)[number]) =>
+      e.layerId && imported.layers.some((layer) => layer.id === e.layerId) ? [e.layerId] : (locate(directory, e.no)?.layerIds ?? [])
+    const hidden = elements.map(layersOf).filter((ids) => ids.length > 0 && !ids.some((layerId) => imported.active.has(layerId)))
+    for (const layerId of new Set(hidden.map((ids) => ids[0]))) imported.toggle(layerId, true)
+    const points = elements.flatMap((e) => placeOf(directory, e) ?? [])
+    if (points.length > 0) setView({ kind: 'points', points })
   }
+
+  // The form gives way to the map. Nothing on the map changes but the squares that
+  // can be clicked; on a phone, where the page scrolls, the map is brought under the finger.
+  const picking = editor.picking
+  useEffect(() => {
+    if (picking && !wide) mapSection.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+  }, [picking, wide])
+  const framePicked = () => {
+    const points = editor.draft ? [editor.draft.main, ...editor.draft.backups].flatMap((row): LatLng[] => (row.at ? [toLatLng(row.at)] : [])) : []
+    if (points.length > 1) setView({ kind: 'points', points })
+  }
+  const pointOut = (at: LatLng | null) => {
+    editor.setHover(at)
+    if (at) setView({ kind: 'reveal', at })
+  }
+
+  // the form's editor; pointing a place out also brings it into view
+  const planEditor = { ...editor, setHover: pointOut }
 
   const exportPlans = () =>
     saveCsv(
@@ -259,7 +320,7 @@ export function Dashboard(props: DashboardProps) {
 
   return (
     <div className="rc-console">
-      <section className="rc-map" aria-label="الخريطة">
+      <section className="rc-map" aria-label="الخريطة" ref={mapSection}>
         <NetworkMap
           center={sector.center}
           zoom={sector.zoom}
@@ -272,18 +333,26 @@ export function Dashboard(props: DashboardProps) {
           selectedId={selected?.station.id ?? null}
           highlightTies={highlightTies}
           plans={planDrawings}
+          frame={frame}
+          pickable={pickable}
+          pickedBackups={pickedBackups}
+          pointedOut={editor.hover}
           theme={theme}
           onSelect={(id) => select(id, 'map')}
           onSelectPlan={(id) => {
+            // the plan being written is not one to open
+            if (editor.draft) return
             openPlans()
             selectPlan(id)
           }}
+          onPick={editor.pick}
         />
       </section>
 
       <KpiCards
         summary={summary}
         total={rows.length}
+        empty={!networkShown}
         sectorName={sector.nameAr}
         conditionsLabel={`${periodLabel} · ${scenarioLabel}`}
         open={kpisOpen}
@@ -301,6 +370,9 @@ export function Dashboard(props: DashboardProps) {
           activeCount={activeFilters}
           basemap={basemap}
           onBasemap={props.onBasemap}
+          networkShown={networkShown}
+          demoNetwork={synthetic ? props.demoNetwork : undefined}
+          onDemoNetwork={props.onDemoNetwork}
           onPlans={plans.available ? openPlans : undefined}
           importedLayers={
             imported.layers.length > 0 && (
@@ -311,6 +383,7 @@ export function Dashboard(props: DashboardProps) {
                 onZoom={(bbox) => setView({ kind: 'bbox', bbox })}
                 onPoint={pointAt}
                 onDelete={onDeleteLayer}
+                onDeleteMany={props.onDeleteLayers}
               />
             )
           }
@@ -338,11 +411,12 @@ export function Dashboard(props: DashboardProps) {
             plansOpen={plansOpen}
           />
         </div>
-        <MapLegend layers={layers} theme={theme} open={legendOpen} onToggle={() => setLegendChoice(!legendOpen)} />
+        {networkShown && <MapLegend layers={layers} theme={theme} open={legendOpen} onToggle={() => setLegendChoice(!legendOpen)} />}
       </div>
 
       <StationDetail
         row={detail}
+        synthetic={synthetic}
         areaName={areaName}
         feeders={feeders}
         feederCard={
@@ -365,6 +439,7 @@ export function Dashboard(props: DashboardProps) {
           plans={plans}
           rows={planRows}
           directory={directory}
+          editor={planEditor}
           isAdmin={isAdmin}
           busy={busy}
           derating={periodDerating}
@@ -377,6 +452,7 @@ export function Dashboard(props: DashboardProps) {
           onShowAll={setShowAllPlans}
           onExport={exportPlans}
           onShowOnMap={() => setPlansOpen(false)}
+          onPicked={framePicked}
           onSave={props.onSavePlan}
           onDelete={props.onDeletePlan}
           onRating={props.onPlanRating}
@@ -407,7 +483,7 @@ export function Dashboard(props: DashboardProps) {
           </button>
         )}
       </div>
-      {(filtersOpen || detail || (plansOpen && plans.available)) && (
+      {(filtersOpen || detail || (plansOpen && plans.available && !editor.picking)) && (
         <button
           className="rc-scrim"
           type="button"
@@ -425,6 +501,7 @@ export function Dashboard(props: DashboardProps) {
         onToggle={() => setSheetOpen(!sheetOpen)}
         listedCount={priority.length}
         visibleCount={visible.length}
+        empty={!networkShown}
         onExport={exportCsv}
         table={<PriorityTable rows={priority} selectedId={selected?.station.id ?? null} onSelect={(id) => select(id, 'table')} />}
         methodology={<Methodology />}

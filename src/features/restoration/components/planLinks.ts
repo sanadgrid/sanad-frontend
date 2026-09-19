@@ -24,6 +24,8 @@ export interface PlanDrawing {
   links: PlanLink[]
   /** The plan being read: the others, when all are shown, stand back. */
   selected: boolean
+  /** Being written, its load not typed yet: the amperes on its links would all read zero. */
+  quiet?: boolean
 }
 
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -56,7 +58,7 @@ export function drawPlans(group: L.LayerGroup, plans: PlanDrawing[], onSelect: (
           'rc-plan-marker',
         ),
       }).addTo(group)
-      if (!plan.selected) continue
+      if (!plan.selected || plan.quiet) continue
       const middle: L.LatLngTuple = [(link.at.lat + plan.main.at.lat) / 2, (link.at.lng + plan.main.at.lng) / 2]
       L.marker(middle, {
         pane: PLAN_PANE,

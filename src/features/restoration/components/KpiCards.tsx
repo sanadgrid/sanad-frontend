@@ -7,6 +7,8 @@ interface KpiCardsProps {
   summary: Summary
   /** Stations in the sector, before filtering. */
   total: number
+  /** No network is on the map: there is nothing to work the figures out from. */
+  empty?: boolean
   /** What the figures are about: the sector, and the period and scenario they are computed for. */
   sectorName: string
   conditionsLabel: string
@@ -51,7 +53,24 @@ function donutGradient(summary: Summary): string {
 const toneFor = (pct: number) => (pct >= 99.5 ? 'ok' : pct >= 70 ? 'warn' : 'bad')
 const n1 = <span dir="ltr">N-1</span>
 
-export function KpiCards({ summary, total, sectorName, conditionsLabel, open, onToggle }: KpiCardsProps) {
+/** Said wherever figures of the network would stand, while there is no real network to work them out from. */
+export const NO_NETWORK = 'لا توجد بيانات شبكة فعلية بعد'
+
+export function KpiCards({ summary, total, empty, sectorName, conditionsLabel, open, onToggle }: KpiCardsProps) {
+  if (empty)
+    return (
+      <section className="rc-float rc-kpis rc-kpis--empty" aria-label="مؤشرات المحطات">
+        <div className="rc-kpis__lead">
+          <h1 className="rc-title">قدرة استعادة الخدمة</h1>
+          <p>{sectorName}</p>
+        </div>
+        <p className="rc-kpis__none">
+          <b>{NO_NETWORK}</b>
+          <span>الخريطة تعرض الطبقات المستوردة وخطط التغذية البديلة.</span>
+        </p>
+      </section>
+    )
+
   const capacityTone = summary.stations ? toneFor(summary.capacityPct) : undefined
 
   // folded away: the two figures an operator glances at, and the way back

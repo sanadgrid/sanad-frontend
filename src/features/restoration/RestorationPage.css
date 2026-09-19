@@ -1903,6 +1903,83 @@
   flex: 1;
 }
 
+/* twin layers of one imported file: a quiet notice, and what will go once it is asked */
+.rc-imported__twins {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--rc-warn-text) 35%, transparent);
+  border-radius: 10px;
+  background: var(--rc-warn-soft);
+  font-size: 12px;
+  color: var(--rc-warn-text);
+}
+
+.rc-imported__twins p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.rc-imported__twins p svg {
+  flex: none;
+}
+
+.rc-imported__twins p .rc-link:first-of-type {
+  margin-inline-start: auto;
+}
+
+.rc-imported .rc-imported__twins ul {
+  gap: 4px;
+  max-height: 180px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--rc-raised);
+  color: var(--rc-text-2);
+  overflow-y: auto;
+}
+
+.rc-imported__twins li {
+  display: grid;
+  gap: 1px;
+  font-size: 11.5px;
+}
+
+.rc-imported__doomed {
+  color: var(--rc-bad-text, var(--rc-warn-text));
+}
+
+.rc-imported__chip.rc-imported__chip--twin {
+  border-color: color-mix(in srgb, var(--rc-warn-text) 45%, transparent);
+  background: var(--rc-warn-soft);
+  color: var(--rc-warn-text);
+}
+
+/* the box of "all" stands over the boxes of the layers: past the arrow of a row */
+.rc-imported__all {
+  min-height: 28px;
+  padding-inline-start: 28px;
+  font-weight: 600;
+}
+
+.rc-check input:focus-visible {
+  outline: 2px solid var(--rc-focus);
+  outline-offset: 2px;
+}
+
+.rc-imported__status .rc-link {
+  margin-inline-start: auto;
+}
+
+@media (max-width: 1099.98px) {
+  .rc-imported__all {
+    min-height: 44px;
+  }
+}
+
 .rc-imported__expand {
   display: grid;
   place-items: center;
@@ -2967,7 +3044,7 @@
 .rc-planform__heads,
 .rc-planform__row {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1.25fr) minmax(0, 1fr) 26px;
+  grid-template-columns: 62px minmax(0, 1.25fr) minmax(0, 1fr) 77px;
   align-items: center;
   gap: 6px;
 }
@@ -3324,6 +3401,401 @@
 .rc-basemap__stops button.is-current {
   font-weight: 700;
   color: var(--rc-accent-strong);
+}
+
+/* ---------- a plan written on the map ---------- */
+.rc-planform[hidden],
+.rc-drawer__head[hidden] {
+  display: none;
+}
+
+.rc-planform__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rc-planform__quick .rc-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* up, down, remove: one cell, so the two inputs keep their width */
+.rc-planform__acts {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.rc-planform__acts .rc-icon-btn--small {
+  width: 25px;
+}
+
+/* the form styles every input as a text box: not this one */
+.rc-planform .rc-check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--rc-accent);
+  cursor: pointer;
+}
+
+/* made for a presentation: said quietly wherever the case or the network is shown */
+.rc-demo-chip {
+  display: inline-block;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px dashed color-mix(in srgb, var(--rc-warn-text) 55%, transparent);
+  border-radius: 99px;
+  background: var(--rc-warn-soft);
+  color: var(--rc-warn-text);
+  font: 600 11px/1.5 var(--font-ar);
+  letter-spacing: 0;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+h2 > .rc-demo-chip,
+h3 > .rc-demo-chip {
+  margin-inline-start: 8px;
+}
+
+/* one number at several places: which of them is meant */
+.rc-places {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--rc-warn-text) 35%, transparent);
+  border-radius: 10px;
+  background: var(--rc-warn-soft);
+}
+
+.rc-places__count {
+  margin: 0 0 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--rc-warn-text);
+}
+
+.rc-places button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--rc-raised);
+  color: var(--rc-text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.rc-places button:hover,
+.rc-places button:focus-visible {
+  border-color: var(--rc-accent-line);
+  outline: none;
+}
+
+.rc-places button:focus-visible {
+  box-shadow: 0 0 0 2px var(--rc-focus-halo);
+}
+
+.rc-places button[aria-checked='true'] {
+  border-color: var(--rc-accent);
+  background: var(--rc-accent-soft);
+  font-weight: 600;
+}
+
+.rc-places button > i {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  background: var(--rc-track);
+  color: var(--rc-text-2);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.rc-places button[aria-checked='true'] > i {
+  background: var(--rc-accent);
+  color: var(--rc-on-accent);
+}
+
+.rc-places bdi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-places__name {
+  font-size: 11px;
+  color: var(--rc-muted);
+}
+
+.rc-places small {
+  flex: none;
+  margin-inline-start: auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--rc-muted);
+}
+
+/* answered: one quiet line says which place, and opens the list again */
+.rc-places--held {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.rc-places--held button {
+  border-color: var(--rc-line-strong);
+  background: var(--rc-inset);
+  font-size: 12px;
+}
+
+.rc-places__change {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rc-accent-strong);
+}
+
+.rc-stationno__options small {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--rc-warn-text);
+}
+
+/* a phone brings the map under the finger when picking starts: clear of the bar that
+   sticks to the top (about 140px there, of which the site's own scroll padding gives 84) */
+.rc-map {
+  scroll-margin-top: 60px;
+}
+
+/* …and the bar at the foot of the screen must not sit on the map: the page grows by its height */
+@media (max-width: 1099.98px) {
+  .rc-console:has(.rc-plans.is-picking) {
+    padding-bottom: 150px;
+  }
+}
+
+/* the form, while its stations are clicked on the map: a slim bar where the panel was */
+.rc-plans.is-picking .rc-drawer__body {
+  padding: 12px 14px;
+}
+
+.rc-pickbar {
+  display: grid;
+  gap: 8px;
+  outline: none;
+}
+
+.rc-pickbar__ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--rc-heading);
+}
+
+.rc-pickbar__ask svg {
+  flex: none;
+  color: var(--rc-accent-strong);
+}
+
+.rc-pickbar__picked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rc-pickbar__picked li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 2px 3px;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 99px;
+  background: var(--rc-inset);
+  font-size: 12px;
+  font-weight: 700;
+  direction: ltr;
+}
+
+.rc-pickbar__main > i {
+  width: 16px;
+  height: 16px;
+  border: 3px solid var(--rc-link-main);
+  border-radius: 50%;
+}
+
+.rc-pickbar__hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--rc-muted);
+}
+
+.rc-pickbar__hint.is-warn {
+  color: var(--rc-warn-text);
+  font-weight: 600;
+}
+
+.rc-pickbar__foot {
+  display: flex;
+  gap: 8px;
+}
+
+.rc-pickbar__foot .rc-btn--accent {
+  flex: 1;
+}
+
+/* the option of a duplicate number under the pointer */
+.rc-pointout {
+  position: absolute;
+  top: -19px;
+  left: -19px;
+  width: 38px;
+  height: 38px;
+  border: 3px solid var(--rc-accent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--rc-accent) 16%, transparent);
+  box-shadow: 0 0 0 2px var(--rc-link-casing);
+  animation: rc-pointout 1.1s ease-out infinite;
+}
+
+@keyframes rc-pointout {
+  from {
+    transform: scale(0.55);
+    opacity: 1;
+  }
+
+  to {
+    transform: scale(1.25);
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-pointout {
+    animation: none;
+  }
+}
+
+/* ---------- without a network on the map ---------- */
+.rc-kpis--empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  padding: 10px 16px;
+}
+
+.rc-kpis__none {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--rc-muted);
+}
+
+.rc-kpis__none b {
+  font-size: 13.5px;
+  color: var(--rc-text-2);
+}
+
+.rc-sheet--empty p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 11px 16px;
+  font-size: 12.5px;
+  color: var(--rc-muted);
+}
+
+.rc-sheet--empty svg {
+  flex: none;
+  color: var(--rc-faint);
+}
+
+.rc-sheet--empty b {
+  font-size: 13px;
+  color: var(--rc-text-2);
+}
+
+.rc-layers__demo {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--rc-line-strong);
+}
+
+.rc-layers__demo small {
+  font-size: 11px;
+  color: var(--rc-muted);
+}
+
+.rc-disclose {
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 12px;
+}
+
+.rc-disclose summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rc-text-2);
+  list-style: none;
+  cursor: pointer;
+}
+
+.rc-disclose summary::-webkit-details-marker {
+  display: none;
+}
+
+.rc-disclose summary svg {
+  flex: none;
+  transition: transform 0.2s;
+}
+
+.rc-disclose:not([open]) summary svg {
+  transform: rotate(90deg);
+}
+
+.rc-disclose summary:focus-visible {
+  border-radius: 12px;
+  outline: 2px solid var(--rc-focus);
+  outline-offset: -2px;
+}
+
+.rc-disclose__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 15px;
+  padding: 4px 12px 14px;
 }
 
 /* ---------- wide screens: the map is the page ---------- */

@@ -7,6 +7,7 @@ import { Dashboard } from './Dashboard'
 import { demoNetwork } from './demoData'
 import { useBackupPlans } from './useBackupPlans'
 import { useBasemap } from './useBasemap'
+import { useDemoNetwork } from './useDemoNetwork'
 import { useMapLayers } from './useMapLayers'
 import { useTheme } from './useTheme'
 import './RestorationPage.css'
@@ -29,6 +30,17 @@ const PUBLISH_DONE = 'تم نشر البيانات'
 const PUBLISH_FAILED = 'تعذّر نشر البيانات. تأكد من صلاحياتك وحاول مرة أخرى.'
 const LAYER_DELETED = 'تم حذف الطبقة'
 const LAYER_DELETE_FAILED = 'تعذّر حذف الطبقة. تأكد من صلاحياتك وحاول مرة أخرى.'
+const TWINS_DELETED = 'تم حذف الطبقات المكررة'
+
+/** A run of deletions that stopped half-way: what went is gone, and the message says where it stopped. */
+class StoppedDeleting extends Error {
+  text: string
+
+  constructor(removed: number, total: number, name: string) {
+    super('map layers: the deletion stopped half-way')
+    this.text = `حُذفت ${removed} من ${total}، ثم تعذّر حذف «${name}». حاول مرة أخرى للباقي.`
+  }
+}
 const PLAN_SAVED = 'تم حفظ الخطة'
 const PLAN_DELETED = 'تم حذف الخطة'
 const RATING_SAVED = 'تم حفظ سعة القاطع المعتمدة'
@@ -60,6 +72,7 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
   const [toast, setToast] = useState<Toast | null>(null)
   const [theme, toggleTheme] = useTheme()
   const [basemap, setBasemap] = useBasemap()
+  const [demoNetworkShown, showDemoNetwork] = useDemoNetwork()
 
   useEffect(() => {
     const previous = document.title
@@ -124,6 +137,17 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
     }
   }
 
+  const deleteLayers = (layerIds: string[]) =>
+    run(
+      async () => {
+        const { removed, failed } = await mapLayers.removeMany(layerIds)
+        const name = mapLayers.layers.find((layer) => layer.id === failed)?.name
+        if (failed) throw new StoppedDeleting(removed.length, layerIds.length, name ?? 'إحدى الطبقات')
+      },
+      (error) => (error instanceof StoppedDeleting ? error.text : LAYER_DELETE_FAILED),
+      TWINS_DELETED,
+    )
+
   const seed = () =>
     run(
       async () => {
@@ -138,6 +162,7 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
     <div className="rc" data-theme={theme} data-basemap={basemap}>
       <TopBar
         source={loaded?.source ?? null}
+        synthetic={demoNetworkShown && sector?.visibility === 'public'}
         sectors={sectors}
         sectorId={sectorId}
         user={user}
@@ -162,10 +187,13 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
             imported={mapLayers}
             plans={backupPlans}
             basemap={basemap}
+            demoNetwork={demoNetworkShown}
             isAdmin={isAdmin}
             busy={busy}
             onBasemap={setBasemap}
+            onDemoNetwork={showDemoNetwork}
             onDeleteLayer={(layerId) => run(() => mapLayers.remove(layerId), LAYER_DELETE_FAILED, LAYER_DELETED)}
+            onDeleteLayers={deleteLayers}
             onSavePlan={(saved) => run(() => backupPlans.save(saved), PLAN_WRITE_FAILED, PLAN_SAVED)}
             onDeletePlan={(caseId) => run(() => backupPlans.remove(caseId), PLAN_WRITE_FAILED, PLAN_DELETED)}
             onPlanRating={(ratingA) => run(() => backupPlans.setRating(ratingA), PLAN_WRITE_FAILED, RATING_SAVED)}

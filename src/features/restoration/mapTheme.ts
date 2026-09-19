@@ -17,6 +17,8 @@ export interface MapColors {
   vip: string
   /** The number beside a station of an imported layer; `markerStroke` is its halo. */
   importedLabel: string
+  /** A station that can be clicked into the plan being written; `markerStroke` is its rim. */
+  pickable: string
 }
 
 const COLORS: Record<Theme, MapColors> = {
@@ -33,6 +35,7 @@ const COLORS: Record<Theme, MapColors> = {
     sensitive: '#d6247a',
     vip: '#9a6a1f',
     importedLabel: '#0a2340',
+    pickable: '#0878c9',
   },
   // on the inverted basemap: light tints, and a navy rim separates the markers
   dark: {
@@ -47,6 +50,7 @@ const COLORS: Record<Theme, MapColors> = {
     sensitive: '#ff9ecb',
     vip: '#d7b58a',
     importedLabel: '#eaf5ff',
+    pickable: '#5fe6f0',
   },
 }
 

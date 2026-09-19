@@ -44,6 +44,31 @@ describe('backup plan document', () => {
     expect(caseOf('nonsense')).toBeNull()
   })
 
+  it('keeps the chosen place of an element and the demo flag through the document, and drops what is not a place', () => {
+    const placed: BackupCase = {
+      ...plan('a'),
+      demo: true,
+      note: 'x',
+      main: { no: '7001', loadA: 320, at: [46.7, 24.7], layerId: 'layer-a' },
+      backups: [{ no: '7005', loadA: 270, at: [46.72, 24.7], layerId: 'layer-a' }, { no: '7005', loadA: 285, at: [46.8, 24.8] }, { no: '7003', loadA: 260 }],
+    }
+    const doc = applyPlanChanges(emptyPlan('central'), [{ upsert: placed }])
+    // what is written goes through JSON, and is read back through planOf
+    const stored = JSON.parse(JSON.stringify(doc)) as Record<string, unknown>
+    expect(planOf('central', stored).cases).toEqual([placed])
+
+    const odd = { id: 'b', demo: 'yes', main: { no: '7001', at: [46.7], layerId: 'l' }, backups: [{ no: '7002', at: [200, 24.7] }, { no: '7003', at: ['46.7', 24.7] }, { no: '7004', at: [46.7, 24.7], layerId: 7 }] }
+    expect(caseOf(odd)).toEqual({
+      id: 'b',
+      level: 'station',
+      voltageKv: 13.8,
+      main: { no: '7001', loadA: 0 },
+      backups: [{ no: '7002', loadA: 0 }, { no: '7003', loadA: 0 }, { no: '7004', loadA: 0, at: [46.7, 24.7], layerId: '7' }],
+    })
+    // a case stored before places were kept reads as it always did
+    expect(caseOf(plan('old'))).toEqual(plan('old'))
+  })
+
   it('holds thousands of cases in one document, and says when it no longer can', () => {
     const many = (n: number) => ({ ...emptyPlan('central'), cases: Array.from({ length: n }, (_, i) => plan(`case-${i}`)) })
     expect(fitsOneDocument(many(3000))).toBe(true)

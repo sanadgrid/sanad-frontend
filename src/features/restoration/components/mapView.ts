@@ -22,6 +22,8 @@ export type MapView =
   | { kind: 'place'; layerId: string; place: Place }
   /** Frame these places, whatever they are: the stations of a backup plan. */
   | { kind: 'points'; points: LatLng[] }
+  /** Bring one place into the clear area, only if it is outside it: a place being pointed out. */
+  | { kind: 'reveal'; at: LatLng }
 
 // kept free around what is fitted, so a marker and its label never touch a panel
 const MARGIN = 44

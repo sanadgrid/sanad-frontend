@@ -6,6 +6,7 @@ import { summarize, type BackupCase, type CaseResult, type GroupSummary } from '
 import { normalizeQuery } from '../import/stations'
 import { fmt, STATUS } from '../labels'
 import type { BackupPlans } from '../useBackupPlans'
+import type { PlanEditor } from '../usePlanEditor'
 import { PlanDetail, Sensitivity, type SensitivityProps } from './PlanDetail'
 import { PlanForm } from './PlanForm'
 import { Toggle } from './Toggle'
@@ -21,6 +22,8 @@ interface BackupPlansPanelProps {
   plans: BackupPlans
   rows: PlanRow[]
   directory: StationDirectory
+  /** The plan being written, shared with the map. */
+  editor: PlanEditor
   isAdmin: boolean
   busy: boolean
   /** The engine's derating for the period on screen, and the period's name. */
@@ -35,6 +38,8 @@ interface BackupPlansPanelProps {
   onShowAll: (on: boolean) => void
   onExport: () => void
   onShowOnMap: () => void
+  /** The stations of the plan being written were picked on the map. */
+  onPicked: () => void
   /** These resolve to whether the change was written. */
   onSave: (saved: BackupCase) => Promise<boolean>
   onDelete: (caseId: string) => Promise<boolean>
@@ -88,8 +93,7 @@ function SummaryBlock({ total }: { total: GroupSummary }) {
 }
 
 export function BackupPlansPanel(props: BackupPlansPanelProps) {
-  const { plans, rows, directory, isAdmin, busy, derating, periodLabel, deratingOn, selectedId, showAll } = props
-  const [editing, setEditing] = useState<'new' | 'selected' | null>(null)
+  const { plans, rows, directory, editor, isAdmin, busy, derating, periodLabel, deratingOn, selectedId, showAll } = props
   const [ratingDraft, setRatingDraft] = useState<string | null>(null)
   const ratingA = plans.plan?.ratingA ?? 400
   const selected = rows.find((row) => row.plan.id === selectedId) ?? null
@@ -124,8 +128,8 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
   }
 
   return (
-    <aside className="rc-float rc-drawer rc-plans" id="rc-plans" aria-label="خطط التغذية البديلة">
-      <header className="rc-drawer__head">
+    <aside className={`rc-float rc-drawer rc-plans${editor.picking ? ' is-picking' : ''}`} id="rc-plans" aria-label="خطط التغذية البديلة">
+      <header className="rc-drawer__head" hidden={editor.picking}>
         <Icon name="swap" size={16} />
         <h2 className="rc-drawer__title">خطط التغذية البديلة</h2>
         {rows.length > 0 && <span className="rc-count rc-count--quiet num">{fmt(rows.length)}</span>}
@@ -135,18 +139,18 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
       </header>
 
       {/* a fresh body for each view, so none opens scrolled to where the last one was left */}
-      <div className="rc-drawer__body" key={editing ?? selected?.plan.id ?? 'list'}>
+      <div className="rc-drawer__body" key={editor.draft?.id ?? selected?.plan.id ?? 'list'}>
         {plans.loading ? (
           <p className="rc-imported__status" role="status">
             <span className="rc-spinner" aria-hidden="true" />
             جارٍ تحميل الخطط…
           </p>
-        ) : editing ? (
+        ) : editor.draft ? (
           <>
-            <h3 className="rc-detail__title">{editing === 'new' ? 'خطة جديدة' : 'تعديل الخطة'}</h3>
+            {!editor.picking && <h3 className="rc-detail__title">{editor.isNew ? 'خطة جديدة' : 'تعديل الخطة'}</h3>}
             <PlanForm
-              key={editing === 'selected' ? selected?.plan.id : 'new'}
-              initial={editing === 'selected' ? selected?.plan : undefined}
+              editor={editor}
+              draft={editor.draft}
               ratingA={ratingA}
               directory={directory}
               busy={busy}
@@ -155,7 +159,8 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
                 if (written) props.onSelect(saved.id, saved)
                 return written
               }}
-              onCancel={() => setEditing(null)}
+              onPicked={props.onPicked}
+              onCancel={editor.close}
             />
           </>
         ) : selected ? (
@@ -168,7 +173,7 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
             canEdit={isAdmin}
             busy={busy}
             onBack={() => props.onSelect(null)}
-            onEdit={() => setEditing('selected')}
+            onEdit={() => editor.open(selected.plan)}
             onDelete={async () => {
               if (await props.onDelete(selected.plan.id)) props.onSelect(null)
             }}
@@ -211,7 +216,7 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
 
             <div className="rc-plans__tools">
               {isAdmin && (
-                <button className="rc-btn rc-btn--accent" type="button" onClick={() => setEditing('new')}>
+                <button className="rc-btn rc-btn--accent" type="button" onClick={() => editor.open()}>
                   <Icon name="plus" size={15} />
                   إضافة خطة
                 </button>
@@ -245,6 +250,7 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
                               {row.plan.main.no}
                             </b>
                             <small>{row.plan.level === 'feeder' ? 'مغذي' : 'محطة'}</small>
+                            {row.plan.demo && <small className="rc-demo-chip">تجريبي</small>}
                           </span>
                           <span className="rc-plans__backups">
                             {row.plan.backups.length === 0
