@@ -1,6 +1,8 @@
+import { normalizeQuery, stationNoOf } from '../import/stations'
 import type { ParsedRow } from './bulkParse'
 import { placesOf, toPosition, type StationDirectory } from './directory'
 import { assessCase, summarize, type BackupCase, type BackupElement, type CaseResult, type ModelOptions } from './model'
+import type { StationPin } from './stationReview'
 
 // Pasted rows, checked against what the sector already holds before anything is
 // written: which numbers the imported stations know, which stand at several
@@ -26,9 +28,11 @@ interface ReviewContext {
   directory: StationDirectory
   options: ModelOptions
   newId: () => string
+  /** Stations the same sheet brings along: an element with such a number stands at the sheet's point. */
+  pins?: ReadonlyMap<string, StationPin>
 }
 
-export function reviewRows(rows: ParsedRow[], { existing, directory, options, newId }: ReviewContext): ReviewedRow[] {
+export function reviewRows(rows: ParsedRow[], { existing, directory, options, newId, pins }: ReviewContext): ReviewedRow[] {
   const idOfMain = new Map(existing.map((c) => [c.main.no, c.id] as const).reverse())
   const pasted = new Set<string>()
   const hasDirectory = directory.size > 0
@@ -38,6 +42,8 @@ export function reviewRows(rows: ParsedRow[], { existing, directory, options, ne
     const notFound = new Set<string>()
     const ambiguous = new Set<string>()
     const element = ({ no, loadA }: { no: string; loadA: number }): BackupElement => {
+      const pin = pins?.get(stationNoOf(normalizeQuery(no)) ?? normalizeQuery(no))
+      if (pin) return { no, loadA, at: pin.at, layerId: pin.layerId }
       const places = placesOf(directory, no)
       if (places.length === 0 && hasDirectory) notFound.add(no)
       if (places.length > 1) ambiguous.add(no)

@@ -1,11 +1,15 @@
 import { parseRows } from './bulkParse'
+import { isStationSheet } from './stationParse'
 import { isOldOffice, isZip, MAX_FILE_BYTES, readWorkbook, SheetFileError, type WorkbookSheet } from './xlsxRead'
 
 // A chosen or dropped file on its way to the entry: an Excel workbook gives its
 // sheets, anything else is read as delimited text. What a file is shows in its
 // first bytes, whatever it is called. Pure — no I/O.
 
-export type SheetFile = { kind: 'text'; text: string } | { kind: 'book'; sheets: WorkbookSheet[]; chosen: number }
+export type SheetFile =
+  | { kind: 'text'; text: string }
+  /** `sheets` may hold plans; `stationSheets` list stations, and are kept apart from them. */
+  | { kind: 'book'; sheets: WorkbookSheet[]; chosen: number; stationSheets: WorkbookSheet[] }
 
 const utf16Of = (bytes: Uint8Array) => (bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf-16le' : bytes[0] === 0xfe && bytes[1] === 0xff ? 'utf-16be' : null)
 
@@ -37,8 +41,10 @@ export function readSheetBytes(bytes: Uint8Array): SheetFile {
   if (bytes.length > MAX_FILE_BYTES) throw new SheetFileError('tooBig')
   if (isZip(bytes) || isOldOffice(bytes)) {
     const all = readWorkbook(bytes)
-    const sheets = all.some(canHoldPlans) ? all.filter(canHoldPlans) : all
-    return { kind: 'book', sheets, chosen: bestSheet(sheets) }
+    const stationSheets = all.filter(isStationSheet)
+    const rest = all.filter((sheet) => !stationSheets.includes(sheet))
+    const sheets = rest.some(canHoldPlans) ? rest.filter(canHoldPlans) : rest
+    return { kind: 'book', sheets, chosen: bestSheet(sheets), stationSheets }
   }
   const text = decodeText(bytes)
   if (bytes.length > 0 && notText(bytes, text)) throw new SheetFileError(/^\s*</.test(text.slice(0, 200)) ? 'saveAs' : 'notSheet')

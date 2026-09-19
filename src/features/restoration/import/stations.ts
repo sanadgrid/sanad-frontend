@@ -11,6 +11,8 @@ export interface StationEntry {
   /** The name in the file; left out when it is the usual `S/S ${no}`. */
   n?: string
   c: Position
+  /** Its FLOCSAP, when one is known. */
+  f?: string
 }
 
 export interface StationHit {
@@ -28,7 +30,7 @@ interface ListedLayer {
 /** The station number a name starts with, or `null` when the name is not a station's. */
 export const stationNoOf = (name: string): string | null => STATION_NAME.exec(name)?.[1] ?? null
 
-const usualName = (no: string) => `S/S ${no}`
+export const usualName = (no: string) => `S/S ${no}`
 
 export const stationNameOf = (station: StationEntry) => station.n ?? usualName(station.no)
 
@@ -45,7 +47,7 @@ export function stationDirectory(features: CompactFeature[]): StationEntry[] {
     if (seen.has(key)) continue
     seen.add(key)
     const name = feature.n.trim()
-    stations.push(name === usualName(no) ? { no, c: feature.c } : { no, n: name, c: feature.c })
+    stations.push({ no, ...(name !== usualName(no) && { n: name }), c: feature.c, ...(feature.f && { f: feature.f }) })
   }
   return stations.sort((a, b) => a.no.localeCompare(b.no) || stationNameOf(a).localeCompare(stationNameOf(b)))
 }
@@ -62,8 +64,8 @@ export const normalizeQuery = (text: string) =>
     .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - PERSIAN_ZERO))
 
 /**
- * Stations whose number or name matches, numbers that start with the query
- * first. Works on what the index lists, so searching reads nothing.
+ * Stations whose number, name or FLOCSAP matches, numbers that start with the
+ * query first. Works on what the index lists, so searching reads nothing.
  */
 export function searchStations(layers: ListedLayer[], query: string, limit: number): { hits: StationHit[]; total: number } {
   const q = normalizeQuery(query)
@@ -75,8 +77,9 @@ export function searchStations(layers: ListedLayer[], query: string, limit: numb
     for (const station of layer.stations ?? []) {
       const at = digits ? station.no.indexOf(digits) : -1
       const named = stationNameOf(station).toLowerCase().includes(q)
-      if (at < 0 && !named) continue
-      ranked.push({ hit: { layerId: layer.id, layerName: layer.name, station }, rank: at === 0 ? 0 : 1 })
+      const floc = station.f ? station.f.toLowerCase().startsWith(q) : false
+      if (at < 0 && !named && !floc) continue
+      ranked.push({ hit: { layerId: layer.id, layerName: layer.name, station }, rank: at === 0 || floc ? 0 : 1 })
     }
   }
   ranked.sort((a, b) => a.rank - b.rank || a.hit.station.no.localeCompare(b.hit.station.no))

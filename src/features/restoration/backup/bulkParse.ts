@@ -49,7 +49,7 @@ const ORDINALS: [RegExp, string][] = [
   [/الخامس|fifth/, '5'],
 ]
 // columns of the dashboard's own export that are results, not input
-const DERIVED = /spare|transfer|final|loading|pct|mva|restor|ratio|status|derat|total|متاح|تحويل|نسبة|معتمد|استعاد/
+const DERIVED = /spare|transfer|final|loading|pct|mva|restor|ratio|status|derat|total|floc|متاح|تحويل|نسبة|معتمد|استعاد/
 
 /** What a header cell names, or `null` for a column the entry does not use. */
 export function columnOf(header: string): Column | null {

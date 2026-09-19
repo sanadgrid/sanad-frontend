@@ -35,6 +35,7 @@ function mapNode(node: PlanNode): MapNode[] {
       key: node.key,
       no: node.no,
       name: node.name,
+      floc: node.floc,
       at: node.at,
       status: row?.result.status ?? null,
       figure: row ? ratioLabel(row.result.ratio) : loadingLabel(node.worstPct ?? 0),

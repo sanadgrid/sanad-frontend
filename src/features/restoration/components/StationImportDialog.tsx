@@ -1,70 +1,42 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { Icon } from '../../../components/Icon'
 import type { StationDirectory } from '../backup/directory'
-import type { BackupCase, ModelOptions } from '../backup/model'
-import { templateWorkbook } from '../backup/planXlsx'
-import type { ReviewedStation } from '../backup/stationReview'
+import type { ReviewedStation, StationBox } from '../backup/stationReview'
 import { SheetFileError, type SheetFileFailure } from '../backup/xlsxRead'
-import { saveXlsx } from '../exportXlsx'
+import { saveStationsTemplate } from '../exportXlsx'
 import { fmt } from '../labels'
-import type { LatLng } from '../types'
-import { readSheetFile, useBulkEntry, type BulkEntry } from '../useBulkEntry'
-import { BulkPreview } from './BulkPreview'
+import { readSheetFile } from '../useBulkEntry'
+import { useStationImport } from '../useStationImport'
+import { StationPreview } from './StationPreview'
 
-interface BulkEntryDialogProps {
+interface StationImportDialogProps {
+  sectorId: string
   sectorName: string
-  /** Whose plans these are, and where its map opens: stations typed into the workbook are checked against it. */
-  sector: { id: string; center: LatLng }
-  existing: BackupCase[]
   directory: StationDirectory
-  /** The rating and derating the preview is worked out under: the ones the page shows. */
-  options: ModelOptions
+  box: StationBox
   busy: boolean
-  /** The stations first, then everything in one write; resolves to whether it went through. */
-  onSave: (cases: BackupCase[], stations: ReviewedStation[]) => Promise<boolean>
+  /** Writes the ticked stations; resolves to whether it went through. */
+  onSave: (stations: ReviewedStation[]) => Promise<boolean>
   onClose: () => void
 }
 
-const COLUMNS = 'الرئيسي · حمل الرئيسي · بديل ١ · حمل ١ · بديل ٢ · حمل ٢ · بديل ٣ · حمل ٣ …'
+const COLUMNS = 'رقم المحطة · FLOCSAP · الاسم · خط العرض · خط الطول · الطبقة'
 // the file ending reads left to right inside the Arabic sentence
-const XLSX = '\u2066.xlsx\u2069'
+const XLSX = '⁦.xlsx⁩'
 const FILE_PROBLEM: Record<SheetFileFailure, string> = {
   saveAs: `تعذّرت قراءة هذا الملف. افتحه في Excel واحفظه من «حفظ باسم» بصيغة ${XLSX} ثم اختره مرة أخرى.`,
   notSheet: `هذا الملف ليس جدولاً. اختر ملف Excel بصيغة ${XLSX} أو ملف CSV.`,
-  tooBig: 'الملف أكبر من 10 ميغابايت. انسخ أسطر الخطط إلى ملف Excel جديد ثم اختره.',
+  tooBig: 'الملف أكبر من 10 ميغابايت. انسخ أسطر المحطات إلى ملف Excel جديد ثم اختره.',
   tooManyRows: 'في الورقة أكثر من 20,000 سطر. وزّعها على أكثر من ملف وأدخل كل ملف على حدة.',
 }
 const NOTHING_READ = 'لم يُعثر على أسطر. انسخ الخلايا من الجدول والصقها هنا.'
 const NOTHING_IN_FILE = 'لم يُعثر على أسطر في هذا الملف.'
-const TEMPLATE_NAME = 'نموذج-خطط-التغذية-البديلة.xlsx'
-const NO_STATIONS_YET = 'لا توجد محطات مستوردة بعد، فقوائم النموذج فارغة: أضف المحطات في ورقة «المحطات» أو استورد طبقات الخريطة أولاً.'
+const TEMPLATE_NAME = 'نموذج-المحطات.xlsx'
 
-/** Which sheet of the workbook the preview shows; with several that can hold plans, another may be chosen. */
-function SheetChoice({ book, onPick }: { book: NonNullable<BulkEntry['book']>; onPick: (index: number) => void }) {
-  if (book.sheets.length < 2)
-    return (
-      <p className="rc-bulk__sheet">
-        الورقة: <b>{book.sheets[book.chosen]?.name}</b>
-      </p>
-    )
-  return (
-    <label className="rc-select rc-select--inline rc-bulk__sheet">
-      <span>الورقة:</span>
-      <select value={book.chosen} onChange={(e) => onPick(Number(e.target.value))}>
-        {book.sheets.map((sheet, i) => (
-          <option key={i} value={i}>
-            {sheet.name}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-}
-
-/** Many plans at once: an Excel or CSV file, or rows pasted from a spreadsheet, checked on screen before one write saves them all. */
-export function BulkEntryDialog({ sectorName, sector, existing, directory, options, busy, onSave, onClose }: BulkEntryDialogProps) {
+/** Stations by the sheet: an Excel or CSV file, or rows pasted from a spreadsheet, checked on screen before they become a layer of the map. */
+export function StationImportDialog({ sectorId, sectorName, directory, box, busy, onSave, onClose }: StationImportDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const entry = useBulkEntry(existing, directory, options, sector)
+  const entry = useStationImport(directory, box, sectorId)
   const [problem, setProblem] = useState<string | null>(null)
   const [over, setOver] = useState(false)
 
@@ -83,7 +55,7 @@ export function BulkEntryDialog({ sectorName, sector, existing, directory, optio
       setProblem(null)
       entry.checkFile(read)
     } catch (error) {
-      console.warn('bulk entry:', error)
+      console.warn('station import:', error)
       setProblem(FILE_PROBLEM[error instanceof SheetFileError ? error.reason : 'saveAs'])
     }
   }
@@ -92,7 +64,6 @@ export function BulkEntryDialog({ sectorName, sector, existing, directory, optio
     setOver(false)
     if (!entry.previewing && !busy) void readFile(event.dataTransfer.files[0])
   }
-
   const check = () => {
     if (!entry.text.trim()) return setProblem(NOTHING_READ)
     setProblem(null)
@@ -101,15 +72,13 @@ export function BulkEntryDialog({ sectorName, sector, existing, directory, optio
 
   return (
     <dialog
-      className="rc-dialog rc-bulk"
+      className="rc-dialog rc-bulk rc-stations"
       ref={dialog}
-      aria-labelledby="rc-bulk-title"
+      aria-labelledby="rc-stations-title"
       onCancel={(event) => {
-        // not while the plans are being written
         event.preventDefault()
         if (!busy) onClose()
       }}
-      // a file let go anywhere on the dialog is read, rather than opened in place of the page
       onDragOver={(event) => {
         event.preventDefault()
         if (!entry.previewing) setOver(true)
@@ -119,7 +88,9 @@ export function BulkEntryDialog({ sectorName, sector, existing, directory, optio
     >
       <header className="rc-dialog__head">
         <div>
-          <h2 id="rc-bulk-title">إدخال جماعي لخطط التغذية البديلة</h2>
+          <h2 id="rc-stations-title">
+            استيراد محطات من <span lang="en">Excel</span>
+          </h2>
           <p>
             {sectorName} · اختر ملف <span lang="en">Excel</span>، أو الصق الأسطر من جدولك
           </p>
@@ -131,10 +102,21 @@ export function BulkEntryDialog({ sectorName, sector, existing, directory, optio
 
       <div className="rc-dialog__body">
         {entry.previewing ? (
-          entry.reviewed.length > 0 || entry.stations.reviewed.length > 0 ? (
+          entry.reviewed.length > 0 ? (
             <>
-              {entry.book && <SheetChoice book={entry.book} onPick={entry.pickSheet} />}
-              <BulkPreview entry={entry} />
+              {entry.book && entry.book.sheets.length > 1 && (
+                <label className="rc-select rc-select--inline rc-bulk__sheet">
+                  <span>الورقة:</span>
+                  <select value={entry.book.chosen} onChange={(e) => entry.pickSheet(Number(e.target.value))}>
+                    {entry.book.sheets.map((sheet, i) => (
+                      <option key={i} value={i}>
+                        {sheet.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <StationPreview rows={entry} outsideSwitch />
             </>
           ) : (
             <p className="rc-import__error" role="alert">
@@ -147,10 +129,9 @@ export function BulkEntryDialog({ sectorName, sector, existing, directory, optio
             <p className="rc-bulk__format">
               <b>ترتيب الأعمدة:</b> <span>{COLUMNS}</span>
               <small>
-                سطر العناوين اختياري (بالعربية أو الإنجليزية)، ومعه يمكن إضافة أعمدة «المستوى» و«الجهد» و«السعة» و«ملاحظة». الأحمال بالأمبير، وتُقبل
-                الأرقام العربية وفواصل الآلاف. بدون عناوين: المستوى «محطة» والجهد <span dir="ltr">13.8 kV</span>.
-                <br />
-                في النموذج تُختار المحطات من قوائم منسدلة، وفي ورقة «المحطات» تُضاف محطة جديدة برقمها وإحداثياتها فتُرسم على الخريطة مع الخطط.
+                سطر العناوين اختياري (بالعربية أو الإنجليزية) وبه يمكن ترتيب الأعمدة كما تشاء؛ بدونه تُقرأ الأعمدة الأربعة الأولى: الرقم، الاسم، خط العرض، خط الطول.
+                الإحداثيات بالدرجات العشرية، وتُقبل الأرقام العربية. المحطة الموجودة بالموقع نفسه تُتجاوز، والموجودة بموقع آخر تُضاف موقعاً إضافياً لها. الطبقة الفارغة
+                تعني «محطات مضافة يدوياً».
               </small>
             </p>
             <textarea
@@ -159,7 +140,7 @@ export function BulkEntryDialog({ sectorName, sector, existing, directory, optio
               rows={9}
               spellCheck={false}
               aria-label="الأسطر الملصقة من الجدول"
-              placeholder={'7001\t320\t7002\t270\t7003\t285'}
+              placeholder={'7001\tS/S 7001\t24.7136\t46.6753'}
               value={entry.text}
               onChange={(e) => entry.setText(e.target.value)}
             />
@@ -172,18 +153,16 @@ export function BulkEntryDialog({ sectorName, sector, existing, directory, optio
                   accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
                   onChange={(e) => {
                     void readFile(e.target.files?.[0])
-                    // the same file can be chosen again after it is corrected
                     e.target.value = ''
                   }}
                 />
               </label>
-              <button className="rc-link" type="button" onClick={() => saveXlsx(templateWorkbook(directory), TEMPLATE_NAME)}>
+              <button className="rc-link" type="button" onClick={() => saveStationsTemplate(TEMPLATE_NAME)}>
                 <Icon name="download" size={13} />
                 تنزيل نموذج <span lang="en">Excel</span> للتعبئة
               </button>
               <small>
-                يمكنك سحب ملف <span lang="en">Excel</span> وإفلاته هنا، أو لصق الصفوف منسوخة من الجدول مباشرة. تُقبل أيضاً ملفات <span lang="en">CSV</span>.
-                {directory.size === 0 && <> {NO_STATIONS_YET}</>}
+                يمكنك سحب ملف <span lang="en">Excel</span> وإفلاته هنا. ملف «تصدير المحطات» يُقبل كما هو: ما فيه من محطات معروفة يُتجاوز.
               </small>
             </div>
             {problem && (
@@ -205,19 +184,13 @@ export function BulkEntryDialog({ sectorName, sector, existing, directory, optio
             <button
               className="rc-btn rc-btn--accent"
               type="button"
-              disabled={busy || (entry.toSave.length === 0 && entry.stations.selected.length === 0)}
+              disabled={busy || entry.selected.length === 0}
               onClick={async () => {
-                if (await onSave(entry.toSave, entry.stations.selected)) onClose()
+                if (await onSave(entry.selected)) onClose()
               }}
             >
               <Icon name="check" size={15} />
-              حفظ <span className="num">{fmt(entry.totals.count)}</span> خطة
-              {entry.stations.selected.length > 0 && (
-                <>
-                  {' '}
-                  و<span className="num">{fmt(entry.stations.selected.length)}</span> محطة
-                </>
-              )}
+              حفظ <span className="num">{fmt(entry.selected.length)}</span> محطة
             </button>
           </>
         ) : (

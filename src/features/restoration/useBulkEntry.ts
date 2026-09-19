@@ -4,7 +4,10 @@ import { casesToSave, reviewRows, savedTotals, sectorAfter, type DuplicateChoice
 import type { StationDirectory } from './backup/directory'
 import type { BackupCase, ModelOptions } from './backup/model'
 import { readSheetBytes, rowsToText, type SheetFile } from './backup/sheetFile'
+import { sectorBox } from './backup/stationReview'
 import { MAX_FILE_BYTES, SheetFileError, type WorkbookSheet } from './backup/xlsxRead'
+import type { LatLng } from './types'
+import { useStationRows } from './useStationRows'
 
 const newId = () => (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `case-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
 
@@ -17,20 +20,24 @@ export async function readSheetFile(file: File): Promise<SheetFile> {
 interface Book {
   sheets: WorkbookSheet[]
   chosen: number
+  /** The workbook's stations sheet, when it has one: stations typed there come along with the plans. */
+  stations: WorkbookSheet | null
 }
 
 /** Pasted rows, or the rows of a file, on their way to the sector's plans: read, checked, and only then saved. Reads nothing. */
-export function useBulkEntry(existing: BackupCase[], directory: StationDirectory, options: ModelOptions) {
+export function useBulkEntry(existing: BackupCase[], directory: StationDirectory, options: ModelOptions, sector: { id: string; center: LatLng }) {
   const [text, setText] = useState('')
   // the rows the preview was made from; `null` while they are still being pasted
   const [checked, setChecked] = useState<string[][] | null>(null)
   const [book, setBook] = useState<Book | null>(null)
   const [choices, setChoices] = useState<ReadonlyMap<number, DuplicateChoice>>(new Map())
+  const box = useMemo(() => sectorBox(sector.center, directory), [sector.center, directory])
+  const stations = useStationRows(book?.stations?.rows ?? null, directory, box, sector.id)
 
   // ids are made once per check, so choosing replace or skip does not reshuffle them
   const reviewed = useMemo(
-    () => (checked === null ? [] : reviewRows(parseRows(checked).rows, { existing, directory, options, newId })),
-    [checked, existing, directory, options],
+    () => (checked === null ? [] : reviewRows(parseRows(checked).rows, { existing, directory, options, newId, pins: stations.pins })),
+    [checked, existing, directory, options, stations.pins],
   )
   const choiceOf = (row: ReviewedRow): DuplicateChoice => choices.get(row.row.line) ?? 'skip'
   const toSave = casesToSave(reviewed, choiceOf)
@@ -61,6 +68,8 @@ export function useBulkEntry(existing: BackupCase[], directory: StationDirectory
       duplicates: reviewed.filter((r) => r.duplicate).length,
       flagged: reviewed.filter((r) => r.plan && (r.notFound.length > 0 || r.ambiguous.length > 0)).length,
     },
+    /** The stations sheet of the workbook, reviewed: new and changed stations are written before the plans. */
+    stations,
     /** The sheets of the workbook the preview shows; `null` for pasted rows and text files. */
     book,
     check: (from = text) => {
@@ -68,7 +77,7 @@ export function useBulkEntry(existing: BackupCase[], directory: StationDirectory
       show(splitRows(from))
     },
     checkFile: (file: SheetFile) => {
-      if (file.kind === 'book') return showSheet({ sheets: file.sheets, chosen: file.chosen })
+      if (file.kind === 'book') return showSheet({ sheets: file.sheets, chosen: file.chosen, stations: file.stationSheets[0] ?? null })
       setBook(null)
       setText(file.text)
       show(splitRows(file.text))

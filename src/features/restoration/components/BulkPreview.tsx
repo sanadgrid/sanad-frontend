@@ -5,6 +5,9 @@ import type { GroupSummary } from '../backup/model'
 import { fmt } from '../labels'
 import type { BulkEntry } from '../useBulkEntry'
 import { Pills } from './Pills'
+import { StationPreview } from './StationPreview'
+
+const ADD_COORDINATES = 'أضف إحداثياتها في ورقة «المحطات»'
 
 const PROBLEM: Record<ParseProblem['kind'], (order: number) => string> = {
   noMain: () => 'رقم العنصر الرئيسي مفقود',
@@ -37,7 +40,11 @@ function RowState({ reviewed: r }: { reviewed: ReviewedRow }) {
   return (
     <ul className="rc-bulk__notes">
       {r.duplicate && <li>{r.duplicate === 'existing' ? 'للعنصر الرئيسي خطة محفوظة' : 'العنصر الرئيسي مكرر في الأسطر'}</li>}
-      {r.notFound.length > 0 && <li>غير موجود في المحطات المستوردة: {list(r.notFound)} — يُحفظ ولا يُرسم</li>}
+      {r.notFound.length > 0 && (
+        <li>
+          غير موجود في المحطات المستوردة: {list(r.notFound)} — يُحفظ ولا يُرسم. {ADD_COORDINATES}
+        </li>
+      )}
       {over.length > 0 && <li>حمله أعلى من سعة القاطع: {list(over)} — راجع الرقم</li>}
       {r.ambiguous.length > 0 && <li>له أكثر من موقع: {list(r.ambiguous)} — يُحفظ بلا موقع ويُحدَّد لاحقاً</li>}
     </ul>
@@ -68,10 +75,21 @@ function Totals({ label, total }: { label: string; total: GroupSummary }) {
 
 /** Every pasted row with what is wrong or notable about it, before anything is written. */
 export function BulkPreview({ entry }: { entry: BulkEntry }) {
-  const { reviewed, counts } = entry
+  const { reviewed, counts, stations } = entry
+  // the rows of the stations sheet that ask for a look: what is listed already at its place does not
+  const stationRows = stations.reviewed.filter((r) => r.state !== 'exists').length
 
   return (
     <>
+      {stationRows > 0 && (
+        <section className="rc-stations__block">
+          <h3>
+            محطات جديدة أو معدّلة <span className="num">({fmt(stationRows)})</span>
+          </h3>
+          <StationPreview rows={stations} hideExisting />
+        </section>
+      )}
+      {reviewed.length === 0 && stationRows > 0 && <p className="rc-bulk__sheet">لا توجد خطط في هذا الملف؛ تُحفظ المحطات وحدها.</p>}
       <dl className="rc-bulk__totals">
         <Totals label="ما سيُحفظ" total={entry.totals} />
         <Totals label="القطاع بعد الحفظ" total={entry.after} />

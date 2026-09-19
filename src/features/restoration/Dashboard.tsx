@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { buildDirectory, directoryBounds, placeOf, toLatLng, toPosition } from './backup/directory'
 import type { BackupCase } from './backup/model'
 import { plansToCsv } from './backup/planCsv'
+import type { ReviewedStation } from './backup/stationReview'
 import { countActive, defaultPlanFilters, type PlanFilters } from './backup/planFilters'
 import { isSupportOnly } from './backup/planNetwork'
 import { AssumptionChips, AssumptionsField } from './components/AssumptionsField'
@@ -54,7 +55,10 @@ interface DashboardProps {
   onDeleteLayers: (layerIds: string[]) => void
   /** These resolve to whether the change was written. */
   onSavePlan: (saved: BackupCase) => Promise<boolean>
-  onSavePlans: (saved: BackupCase[]) => Promise<boolean>
+  /** Stations the workbook brought along go first, then the plans. */
+  onSavePlans: (saved: BackupCase[], stations: ReviewedStation[]) => Promise<boolean>
+  /** The stations of the sector as a file — for members too, so it sits in the layers list. */
+  onExportStations: () => void
   onDeletePlan: (caseId: string) => Promise<boolean>
   onPlanRating: (ratingA: number) => Promise<boolean>
 }
@@ -189,7 +193,7 @@ export function Dashboard(props: DashboardProps) {
   // what writes a workbook is fetched when one is asked for, not with the page
   const exportXlsx = (cases: BackupCase[], name = 'خطط-التغذية-البديلة') =>
     import('./exportXlsx')
-      .then((m) => m.savePlansXlsx(cases, { ratingA }, net.monthDerating, `${name}-${sector.id}.xlsx`))
+      .then((m) => m.savePlansXlsx(cases, { ratingA }, net.monthDerating, `${name}-${sector.id}.xlsx`, directory))
       .catch((error) => console.warn('excel export:', error))
   const assumed = { assumptions, ratingA, savedRatingA: net.savedRatingA, monthDerating: net.monthDerating }
   const showEmpty = !hasPlans && !plans.loading && !emptyDismissed && !plansOpen && !editor.draft
@@ -246,6 +250,7 @@ export function Dashboard(props: DashboardProps) {
                 imported={imported}
                 canDelete={isAdmin}
                 busy={busy}
+                onExportStations={props.onExportStations}
                 onZoom={(bbox) => setView({ kind: 'bbox', bbox })}
                 onPoint={pointAt}
                 onDelete={props.onDeleteLayer}
@@ -361,6 +366,7 @@ export function Dashboard(props: DashboardProps) {
         <Suspense fallback={null}>
           <BulkEntryDialog
             sectorName={sector.nameAr}
+            sector={sector}
             existing={plans.plan?.cases ?? NO_CASES}
             directory={directory}
             options={options}

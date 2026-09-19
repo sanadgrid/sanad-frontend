@@ -686,3 +686,139 @@
     max-width: calc(100% - 64px);
   }
 }
+
+/* ---------- stations: the sheet's rows, and the FLOCSAP of a station ---------- */
+.rc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.rc-stations__block {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--rc-accent-line);
+  border-radius: 12px;
+  background: var(--rc-accent-soft);
+}
+
+.rc-stations__block h3 {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--rc-heading);
+}
+
+.rc-stations__totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--rc-text-2);
+}
+
+.rc-stations__totals .rc-check {
+  margin-inline-start: auto;
+}
+
+.rc-stations__table td:first-child input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--rc-accent);
+}
+
+.rc-stations__table .is-skipped > :not(:first-child):not(:last-child) {
+  opacity: 0.55;
+}
+
+.rc-stations__table tr[data-state='new'] .rc-stations__plain {
+  color: var(--rc-ok-text);
+}
+
+.rc-stations__plain {
+  color: var(--rc-muted);
+}
+
+.rc-bulk__notes .rc-link {
+  margin-inline-start: 6px;
+}
+
+/* the asset register's number: read left to right, in a fixed-pitch face, copied with a click */
+.rc-floc {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 6px;
+  background: var(--rc-fill);
+  color: var(--rc-text-2);
+  font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.rc-floc small {
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--rc-muted);
+}
+
+button.rc-floc {
+  cursor: copy;
+}
+
+button.rc-floc:hover {
+  border-color: var(--rc-accent-line);
+  color: var(--rc-accent-strong);
+}
+
+.rc-floc__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-floc__copied {
+  font-size: 11.5px;
+  color: var(--rc-ok-text);
+}
+
+.rc-plan__flocs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 6px 0 0;
+  font-size: 12.5px;
+}
+
+.rc-popup__floc {
+  margin: 4px 0;
+}
+
+.rc-imported__export {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  /* the number and its state matter more than the line */
+  .rc-stations__table th:nth-child(2),
+  .rc-stations__table td:nth-child(2) {
+    display: none;
+  }
+
+  .rc-stations__table th:first-child,
+  .rc-stations__table td:first-child {
+    display: table-cell;
+  }
+}

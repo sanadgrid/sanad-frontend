@@ -2,11 +2,15 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import type { Access } from '../../services/access'
 import { signOutUser, type AuthUser } from '../../services/auth'
 import { listSectors } from '../../services/sectors'
+import { buildDirectory } from './backup/directory'
+import type { BackupCase } from './backup/model'
 import { dataKind } from './backup/planNetwork'
+import { sectorBox, type ReviewedStation } from './backup/stationReview'
 import type { DataAction } from './components/DataMenu'
 import { TopBar } from './components/TopBar'
 import { Dashboard } from './Dashboard'
 import { builtInSectors, DEFAULT_SECTOR_ID, sectorInfo, type SectorSummary } from './sectors'
+import { PlansNotSaved, saveStations, saveStationsThenPlans, StationsNotSaved } from './stationSave'
 import { useBackupPlans } from './useBackupPlans'
 import { useBasemap } from './useBasemap'
 import { useMapLayers } from './useMapLayers'
@@ -17,13 +21,14 @@ import './PlansNetwork.css'
 // Only admins ever open them, so the file reader and the clean-up are not part of everyone's download.
 const ImportDialog = lazy(() => import('./components/ImportDialog').then((m) => ({ default: m.ImportDialog })))
 const CleanupDialog = lazy(() => import('./components/CleanupDialog').then((m) => ({ default: m.CleanupDialog })))
+const StationImportDialog = lazy(() => import('./components/StationImportDialog').then((m) => ({ default: m.StationImportDialog })))
 
 interface Toast {
   kind: 'ok' | 'error' | 'notice'
   text: string
 }
 
-type AdminDialog = 'import' | 'cleanup' | null
+type AdminDialog = 'import' | 'stations' | 'cleanup' | null
 
 const TOAST_MS = 6000
 const PAGE_TITLE = 'قدرة استعادة الخدمة — SanadGrid'
@@ -49,6 +54,11 @@ const PLANS_SAVED = 'تم حفظ الخطط'
 const PLAN_DELETED = 'تم حذف الخطة'
 const RATING_SAVED = 'تم حفظ سعة القاطع المعتمدة'
 const PLAN_WRITE_FAILED = 'تعذّر حفظ التغيير. تأكد من صلاحياتك وحاول مرة أخرى.'
+const STATIONS_SAVED = 'تم حفظ المحطات'
+const STATIONS_AND_PLANS_SAVED = 'تم حفظ المحطات والخطط'
+const STATIONS_FAILED = 'تعذّر حفظ المحطات، ولم تُحفظ الخطط. تأكد من صلاحياتك وحاول مرة أخرى.'
+const PLANS_FAILED_AFTER_STATIONS = 'حُفظت المحطات، وتعذّر حفظ الخطط. حاول مرة أخرى.'
+const STATIONS_FILE = 'محطات'
 const PLANS_NOTICE = {
   stale: 'تعذّر تحديث الخطط الآن. تُعرض آخر نسخة محفوظة.',
   unavailable: 'تعذّر الوصول إلى الخطط الآن. حاول مرة أخرى بعد قليل.',
@@ -139,9 +149,37 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
       TWINS_DELETED,
     )
 
+  // the stations of the imported layers, as the dashboard also derives them: reads nothing
+  const directory = useMemo(() => buildDirectory(mapLayers.layers), [mapLayers.layers])
+  const box = useMemo(() => sectorBox(sector.center, directory), [sector.center, directory])
+  const cases = backupPlans.plan?.cases ?? []
+  const ratingA = backupPlans.plan?.ratingA ?? sector.ratingA
+
+  // what writes a workbook is fetched when one is asked for, not with the page
+  const exportStations = () =>
+    import('./exportXlsx')
+      .then((m) => m.saveStationsXlsx(directory, cases, { ratingA }, `${STATIONS_FILE}-${sector.id}.xlsx`))
+      .catch((error) => console.warn('stations export:', error))
+
+  // written stations are listed afresh and switched on, so they show at once
+  const showLayers = (layerIds: string[]) => {
+    if (layerIds.length === 0) return
+    mapLayers.refresh(layerIds)
+    for (const id of layerIds) mapLayers.toggle(id, true)
+  }
+  const writeStations = (stations: ReviewedStation[]) => (stations.length > 0 ? saveStations(sector.id, stations, mapLayers.layers) : Promise.resolve([]))
+  const savePlans = (saved: BackupCase[], stations: ReviewedStation[]) =>
+    run(
+      async () => showLayers(await saveStationsThenPlans(() => writeStations(stations), () => (saved.length > 0 ? backupPlans.saveMany(saved) : Promise.resolve()))),
+      (error) => (error instanceof StationsNotSaved ? STATIONS_FAILED : error instanceof PlansNotSaved && error.stationsWritten ? PLANS_FAILED_AFTER_STATIONS : PLAN_WRITE_FAILED),
+      stations.length === 0 ? PLANS_SAVED : saved.length === 0 ? STATIONS_SAVED : STATIONS_AND_PLANS_SAVED,
+    )
+
   const dataActions: DataAction[] = isAdmin
     ? [
         { id: 'import', icon: 'layers', label: 'استيراد طبقات الخريطة', hint: 'ملفات Google Earth', onSelect: () => setDialog('import') },
+        { id: 'stations-import', icon: 'upload', label: 'استيراد محطات من Excel', hint: 'رقم المحطة وإحداثياتها من جدول', onSelect: () => setDialog('stations') },
+        { id: 'stations-export', icon: 'download', label: 'تصدير المحطات إلى Excel', hint: 'كل محطات القطاع مع إحداثياتها', onSelect: () => void exportStations() },
         ...(backupPlans.available ? [{ id: 'bulk', icon: 'table' as const, label: 'إدخال جماعي للخطط', hint: 'قالب Excel أو لصق من الجدول', onSelect: () => setBulkOpen(true) }] : []),
         { id: 'cleanup', icon: 'trash', label: 'حذف بيانات الشبكة التجريبية القديمة', hint: 'الشبكة المصطنعة السابقة فقط', danger: true, onSelect: () => setDialog('cleanup') },
       ]
@@ -179,7 +217,8 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
           onDeleteLayer={(layerId) => run(() => mapLayers.remove(layerId), LAYER_DELETE_FAILED, LAYER_DELETED)}
           onDeleteLayers={deleteLayers}
           onSavePlan={(saved) => run(() => backupPlans.save(saved), PLAN_WRITE_FAILED, PLAN_SAVED)}
-          onSavePlans={(saved) => run(() => backupPlans.saveMany(saved), PLAN_WRITE_FAILED, PLANS_SAVED)}
+          onSavePlans={savePlans}
+          onExportStations={() => void exportStations()}
           onDeletePlan={(caseId) => run(() => backupPlans.remove(caseId), PLAN_WRITE_FAILED, PLAN_DELETED)}
           onPlanRating={(ratingA) => run(() => backupPlans.setRating(ratingA), PLAN_WRITE_FAILED, RATING_SAVED)}
         />
@@ -189,6 +228,16 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
         <Suspense fallback={null}>
           {dialog === 'import' ? (
             <ImportDialog sectorId={sector.id} sectorName={sector.nameAr} center={sector.center} onImported={mapLayers.refresh} onClose={() => setDialog(null)} />
+          ) : dialog === 'stations' ? (
+            <StationImportDialog
+              sectorId={sector.id}
+              sectorName={sector.nameAr}
+              directory={directory}
+              box={box}
+              busy={busy}
+              onSave={(stations) => run(async () => showLayers(await writeStations(stations)), STATIONS_FAILED, STATIONS_SAVED)}
+              onClose={() => setDialog(null)}
+            />
           ) : (
             <CleanupDialog sectorId={sector.id} sectorName={sector.nameAr} onClose={() => setDialog(null)} />
           )}

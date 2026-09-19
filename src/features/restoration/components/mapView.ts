@@ -7,7 +7,7 @@ export interface Place {
   at: Position
   /** What to frame, for a line or an area; a point is flown to. */
   bbox?: Bbox
-  text: { n: string; g?: string; d?: string }
+  text: { n: string; g?: string; d?: string; f?: string }
   /** Found through the index, which knows the name only: the popup is completed once the layer has arrived. */
   partial?: boolean
 }

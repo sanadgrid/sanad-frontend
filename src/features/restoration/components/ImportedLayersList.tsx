@@ -20,6 +20,8 @@ interface ImportedLayersListProps {
   onDelete: (layerId: string) => void
   /** Twin layers of one imported file, to be deleted in one go. */
   onDeleteMany: (layerIds: string[]) => void
+  /** The stations of every layer as an Excel file: reads nothing, so anyone may. */
+  onExportStations?: () => void
 }
 
 // more than this and the number typed is too short to be looking for one station
@@ -33,7 +35,7 @@ const placeOfHit = ({ station }: StationHit): Place => ({ at: station.c, text: {
 const layersPhrase = (count: number) =>
   count === 1 ? 'توجد طبقة مكررة واحدة' : count === 2 ? 'توجد طبقتان مكررتان' : count <= 10 ? `توجد ${fmt(count)} طبقات مكررة` : `توجد ${fmt(count)} طبقة مكررة`
 
-export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint, onDelete, onDeleteMany }: ImportedLayersListProps) {
+export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint, onDelete, onDeleteMany, onExportStations }: ImportedLayersListProps) {
   const { layers, active, loading, failed, contents } = imported
   // the layer whose deletion is waiting for a second, explicit click
   const [confirming, setConfirming] = useState<string | null>(null)
@@ -86,6 +88,12 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
         <span className="rc-field__label">
           طبقات مستوردة <span className="num">({fmt(layers.length)})</span>
         </span>
+        {onExportStations && (
+          <button className="rc-link rc-imported__export" type="button" onClick={onExportStations}>
+            <Icon name="download" size={13} />
+            تصدير المحطات <span lang="en">Excel</span>
+          </button>
+        )}
       </div>
 
       {doomed.size > 0 && !imported.removing && (
@@ -188,6 +196,14 @@ export function ImportedLayersList({ imported, canDelete, busy, onZoom, onPoint,
                       aria-hidden="true"
                     />
                     <bdi className="num">{place.text.n}</bdi>
+                    {hit.station.f && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <bdi className="num rc-floc" dir="ltr">
+                          FLOCSAP {hit.station.f}
+                        </bdi>
+                      </>
+                    )}
                     <span aria-hidden="true">·</span>
                     <bdi className="rc-contents__folder">{hit.layerName}</bdi>
                   </button>

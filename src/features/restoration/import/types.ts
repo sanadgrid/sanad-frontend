@@ -8,6 +8,8 @@ interface FeatureText {
   d?: string
   /** Sub-folders between the layer's folder and the placemark: "11kV / Phase 2". Absent in older imports. */
   g?: string
+  /** A station's FLOCSAP: the number it is known by in the asset register. Text, as given. */
+  f?: string
 }
 
 export type CompactFeature =

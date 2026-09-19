@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
-import { locate, placeOf, placesOf, type StationDirectory } from '../backup/directory'
+import { elementFloc, locate, placeOf, placesOf, type StationDirectory } from '../backup/directory'
 import { ratioLabel } from '../backup/format'
 import type { BackupCase, CaseResult } from '../backup/model'
 import type { SupportLink } from '../backup/planNetwork'
 import { fmt } from '../labels'
 import { CaseFigures, CaseTable } from './CaseTable'
+import { FlocChip } from './FlocChip'
 import { NOT_ON_MAP } from './StationNoField'
 import { SupportList } from './SupportCard'
 
@@ -71,6 +72,11 @@ export function PlanDetail(props: PlanDetailProps) {
     const station = locate(directory, b.no)
     return station && station.name !== `S/S ${station.no}` ? station.name : undefined
   })
+  // the numbers the asset register knows the stations by, where the layers list them
+  const flocs = [plan.main, ...plan.backups].flatMap((e) => {
+    const floc = elementFloc(directory, e)
+    return floc ? [{ no: e.no, floc }] : []
+  })
 
   return (
     <div className="rc-plan">
@@ -128,6 +134,13 @@ export function PlanDetail(props: PlanDetailProps) {
           {plan.ratingA ? ' (خاصة بهذه الخطة)' : ''}
         </p>
         {plan.note && <p className="rc-plan__note">{plan.note}</p>}
+        {flocs.length > 0 && (
+          <p className="rc-plan__flocs">
+            {flocs.map((f, i) => (
+              <FlocChip key={`${f.no}-${i}`} no={f.no} floc={f.floc} />
+            ))}
+          </p>
+        )}
       </div>
 
       <CaseFigures result={result} subject={plan.level === 'feeder' ? 'حمل المغذي' : 'حمل المحطة'} />

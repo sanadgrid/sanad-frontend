@@ -15,6 +15,8 @@ export interface StationPoint {
   /** The layer it was first listed by, and that layer's name. */
   layerId: string
   layerName: string
+  /** Its FLOCSAP, when the layer knows one. */
+  floc?: string
 }
 
 export interface DirectoryStation extends StationPoint {
@@ -41,15 +43,18 @@ export function buildDirectory(layers: ListedLayer[]): StationDirectory {
   const directory = new Map<string, DirectoryStation>()
   for (const layer of layers)
     for (const station of layer.stations ?? []) {
-      const point: StationPoint = { no: station.no, name: stationNameOf(station), at: toLatLng(station.c), layerId: layer.id, layerName: layer.name ?? '' }
+      const point: StationPoint = { no: station.no, name: stationNameOf(station), at: toLatLng(station.c), layerId: layer.id, layerName: layer.name ?? '', ...(station.f && { floc: station.f }) }
       const known = directory.get(station.no)
       if (!known) {
         directory.set(station.no, { ...point, layerIds: [layer.id], points: [point] })
         continue
       }
       if (!known.layerIds.includes(layer.id)) known.layerIds.push(layer.id)
-      // the same place listed by a second layer is still one place
-      if (!known.points.some((p) => samePlace(p.at, point.at))) known.points.push(point)
+      // the same place listed by a second layer is still one place; a FLOCSAP one of them knows is kept
+      const same = known.points.find((p) => samePlace(p.at, point.at))
+      if (!same) known.points.push(point)
+      else if (point.floc && !same.floc) same.floc = point.floc
+      if (point.floc && !known.floc) known.floc = point.floc
     }
   return directory
 }
@@ -64,6 +69,14 @@ export const placesOf = (directory: StationDirectory, no: string): StationPoint[
 /** Where an element of a plan is drawn: the place it names, else the first the directory knows. */
 export const placeOf = (directory: StationDirectory, element: { no: string; at?: Position }): LatLng | null =>
   element.at ? toLatLng(element.at) : (locate(directory, element.no)?.at ?? null)
+
+/** The FLOCSAP of the place an element stands at, else of its station; `null` when none is known. */
+export function elementFloc(directory: StationDirectory, element: { no: string; at?: Position }): string | null {
+  const station = locate(directory, element.no)
+  if (!station) return null
+  const point = element.at && station.points.find((p) => p.at.lng === element.at?.[0] && p.at.lat === element.at?.[1])
+  return point?.floc ?? station.floc ?? null
+}
 
 /** Every place of every number — what can be picked on the map. */
 export const allPoints = (directory: StationDirectory): StationPoint[] => [...directory.values()].flatMap((station) => station.points)

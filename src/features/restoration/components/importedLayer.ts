@@ -23,7 +23,7 @@ export interface DrawnImportedLayer {
   stations: L.CircleMarker[]
 }
 
-type FeatureText = Pick<CompactFeature, 'n' | 'g' | 'd'>
+type FeatureText = Pick<CompactFeature, 'n' | 'g' | 'd' | 'f'>
 
 // Context, not content: a layer can hold thousands of shapes, and they must stay
 // behind the few stations the page is about — small, thin and partly transparent.
@@ -203,10 +203,12 @@ const info = new WeakMap<L.Layer, FeatureText>()
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const flip = ([lng, lat]: Position): L.LatLngTuple => [lat, lng]
 
-const nameHtml = (f: FeatureText) => `<div dir="auto">${escapeHtml(f.n || f.g || '')}</div>`
+const flocHtml = (f: FeatureText) => (f.f ? `<span class="rc-floc" dir="ltr"><small>FLOCSAP</small> ${escapeHtml(f.f)}</span>` : '')
+const nameHtml = (f: FeatureText) => `<div dir="auto">${escapeHtml(f.n || f.g || '')}${f.f ? ` · ${flocHtml(f)}` : ''}</div>`
 const detailHtml = (f: FeatureText) =>
   `<div dir="auto">${f.n ? `<b>${escapeHtml(f.n)}</b>` : ''}` +
   `${f.g ? `<span class="rc-popup__group">${escapeHtml(f.g)}</span>` : ''}` +
+  `${f.f ? `<div class="rc-popup__floc">${flocHtml(f)}</div>` : ''}` +
   `${f.d ? `<p>${escapeHtml(f.d)}</p>` : ''}</div>`
 
 /**

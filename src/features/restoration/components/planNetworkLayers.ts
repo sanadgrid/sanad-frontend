@@ -12,6 +12,7 @@ export interface MapNode {
   key: string
   no: string
   name: string | null
+  floc: string | null
   at: LatLng
   /** The class of its own plan; `null` for a station that only ever backs others up. */
   status: Status | null
@@ -73,7 +74,8 @@ const ltr = (text: string) => `<bdi dir="ltr" class="num">${escapeHtml(text)}</b
 const amps = (value: number) => ltr(`${fmt(value)} A`)
 
 function nodeTooltip(n: MapNode): string {
-  const head = `<div><b>${ltr(n.no)}</b>${n.name ? ` · ${escapeHtml(n.name)}` : ''}${n.demo ? ' · <span class="rc-demo-chip">تجريبي</span>' : ''}</div>`
+  const floc = n.floc ? ` · <span class="rc-floc" dir="ltr"><small>FLOCSAP</small> ${escapeHtml(n.floc)}</span>` : ''
+  const head = `<div><b>${ltr(n.no)}</b>${n.name ? ` · ${escapeHtml(n.name)}` : ''}${floc}${n.demo ? ' · <span class="rc-demo-chip">تجريبي</span>' : ''}</div>`
   const load = `الحمل <b>${amps(n.loadA)}</b> · ${ltr(`${fmt(n.loadMva, 1)} MVA`)}`
   const backing = n.worstPct === null ? '' : `<div class="rc-tip__facts">كبديل: تحميله الآن <b>${ltr(loadingLabel(n.nowPct ?? 0))}</b> · في أسوأ حالة <b>${ltr(loadingLabel(n.worstPct))}</b></div>`
   if (!n.status) return `<div dir="rtl" class="rc-tip">${head}<div class="rc-tip__status"><i></i>بديل فقط — ليست له خطة</div><div class="rc-tip__facts">${load}</div>${backing}</div>`

@@ -46,6 +46,8 @@ export interface PlanNode {
   /** `null`: the number is not in the imported stations and the plan names no point — listed, not drawn. */
   at: LatLng | null
   name: string | null
+  /** The number the asset register knows it by, when a layer lists one. */
+  floc: string | null
   /** The cases it is the main element of, weakest first: the node carries the first one's result. Empty = support only. */
   rows: CaseRow[]
   /** What it would take as a backup: one link per main element it stands behind. */
@@ -118,7 +120,8 @@ export function derivePlanNetwork(cases: BackupCase[], directory: StationDirecto
     if (known) return known
     const point = at && locate(directory, no)?.points.find((p) => p.at.lat === at.lat && p.at.lng === at.lng)
     const name = point && point.name !== `S/S ${point.no}` ? point.name : null
-    const node: PlanNode = { key, no, at, name, rows: [], supports: [], loadA: 0, voltageKv, loadMva: 0, nowPct: null, worstPct: null, worstLevel: null }
+    const floc = point?.floc ?? locate(directory, no)?.floc ?? null
+    const node: PlanNode = { key, no, at, name, floc, rows: [], supports: [], loadA: 0, voltageKv, loadMva: 0, nowPct: null, worstPct: null, worstLevel: null }
     nodes.set(key, node)
     return node
   }

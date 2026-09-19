@@ -152,8 +152,8 @@ describe('writing a workbook', () => {
   })
 
   it('the parts a workbook must have, each well formed, the sheet right to left under a frozen heading', () => {
-    const parts = unzipSync(templateWorkbook())
-    expect(Object.keys(parts)).toEqual(['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml', 'xl/sharedStrings.xml', 'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml'])
+    const parts = unzipSync(templateWorkbook(new Map()))
+    expect(Object.keys(parts)).toEqual(['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml', 'xl/sharedStrings.xml', 'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml'])
     for (const part of Object.values(parts)) {
       const open: string[] = []
       scanXml(new TextDecoder().decode(part), { open: (name) => open.push(name), close: (name) => expect(open.pop()).toBe(name) })
@@ -168,10 +168,11 @@ describe('writing a workbook', () => {
   })
 
   it('the template is read as the entry expects it', () => {
-    const read = readSheetBytes(templateWorkbook())
+    const read = readSheetBytes(templateWorkbook(new Map()))
     if (read.kind !== 'book') throw new Error('not a workbook')
-    // the page of instructions is not offered as a sheet of plans
+    // neither the page of instructions nor the stations sheet is offered as a sheet of plans
     expect(read.sheets.map((s) => s.name)).toEqual(['خطط التغذية البديلة'])
+    expect(read.stationSheets.map((s) => s.name)).toEqual(['المحطات'])
     const sheet = parseRows(read.sheets[0].rows)
     expect(sheet.hadHeader).toBe(true)
     expect(sheet.rows.map((r) => [r.line, r.main.no, r.backups.length, r.level, r.voltageKv, r.ratingA, r.problems.length])).toEqual([[2, '7001', 3, 'station', 13.8, undefined, 0], [3, '7005', 2, 'feeder', 13.8, 400, 0]])
@@ -190,7 +191,8 @@ describe('the plans written out for Excel', () => {
     const header = rows[0].map(String)
     expect(header.slice(resultsFrom).filter((name) => columnOf(name) !== null)).toEqual([])
     expect(header.slice(0, resultsFrom).filter((name) => columnOf(name) === null)).toEqual([])
-    expect(header.slice(resultsFrom)).toHaveLength(10 + 5 * 3)
+    // the FLOCSAP of the main and of each backup, then the figures
+    expect(header.slice(resultsFrom)).toHaveLength(6 + 10 + 5 * 3)
   })
 
   it('an exported file enters again as the same plans, more than three backups included', () => {
@@ -208,7 +210,8 @@ describe('the plans written out for Excel', () => {
     expect(rows[1].slice(0, 4)).toEqual([7001, 320, 7002, 250])
     expect(rows[2][0]).toBe('F-12')
     // 5 backups with 150, 140, 130, 120, 110 A to spare: all of 320 A comes back
-    expect(rows[1].slice(resultsFrom, resultsFrom + 6)).toEqual([650, 320, 0, 100, 'استعادة كاملة', 400])
-    expect(rows[2].slice(resultsFrom, resultsFrom + 6)).toEqual([330, 330, 80.5, 80.4, 'استعادة مرتفعة', 630])
+    const figures = resultsFrom + 6
+    expect(rows[1].slice(figures, figures + 6)).toEqual([650, 320, 0, 100, 'استعادة كاملة', 400])
+    expect(rows[2].slice(figures, figures + 6)).toEqual([330, 330, 80.5, 80.4, 'استعادة مرتفعة', 630])
   })
 })
