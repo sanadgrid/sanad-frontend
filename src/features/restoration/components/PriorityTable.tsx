@@ -1,94 +1,92 @@
-import type { StationRow } from '../filters'
+import { loadingLabel, ratioLabel } from '../backup/format'
+import { loadingLevel } from '../backup/model'
+import type { CaseRow } from '../backup/planNetwork'
 import { fmt, STATUS } from '../labels'
 
 interface PriorityTableProps {
   /** Already sorted and cut to the rows to show. */
-  rows: StationRow[]
+  rows: CaseRow[]
   selectedId: string | null
-  /** A row is the way to a station: it is selected and the map moves to it. */
-  onSelect: (stationId: string) => void
+  /** A row is the way to a plan: it is opened and the map moves to it. */
+  onSelect: (caseId: string) => void
 }
 
-const yesNo = (ok: boolean) => <span className={ok ? 'rc-ok' : 'rc-bad'}>{ok ? 'محقق' : 'غير محقق'}</span>
+const both = (amps: number, mva: number) => (
+  <>
+    {fmt(amps)} <small>· {fmt(mva, 1)}</small>
+  </>
+)
 
 export function PriorityTable({ rows, selectedId, onSelect }: PriorityTableProps) {
-  if (rows.length === 0) return <p className="rc-detail__none rc-sheet__empty">لا توجد محطات مطابقة لخيارات التصفية الحالية.</p>
+  if (rows.length === 0) return <p className="rc-detail__none rc-sheet__empty">لا توجد خطط مطابقة لخيارات التصفية الحالية.</p>
 
   return (
     <table className="rc-table rc-table--rows">
       <thead>
         <tr>
-          <th scope="col">المحطة</th>
-          <th scope="col">قدرة الاستعادة</th>
-          <th scope="col">المنطقة</th>
-          <th scope="col">الإدارة</th>
+          <th scope="col">العنصر الرئيسي</th>
+          <th scope="col">نسبة الاستعادة</th>
+          <th scope="col">المستوى</th>
           <th scope="col">
-            النوع · <span dir="ltr">kV</span>
+            <span dir="ltr">kV</span>
           </th>
           <th scope="col">
-            الحمل <span dir="ltr">MVA</span>
+            الحمل <span dir="ltr">A · MVA</span>
           </th>
           <th scope="col">
-            السعة المؤكدة <span dir="ltr">MVA</span>
-          </th>
-          <th scope="col">عن بُعد</th>
-          <th scope="col">
-            غير مستعاد <span dir="ltr">MW</span>
-          </th>
-          <th scope="col">مشتركون معرضون</th>
-          <th scope="col">حساسون</th>
-          <th scope="col">
-            <span dir="ltr">VIP</span>
+            السعة المتاحة <span dir="ltr">A</span>
           </th>
           <th scope="col">
-            <span dir="ltr">N-1</span>
+            القابل للاستعادة <span dir="ltr">A</span>
           </th>
           <th scope="col">
-            تغذية مؤقتة <span dir="ltr">MVA</span>
+            غير القابل للاستعادة <span dir="ltr">A · MVA</span>
           </th>
+          <th scope="col">التصنيف</th>
+          <th scope="col">البدائل</th>
+          <th scope="col">أعلى تحميل لبديل</th>
         </tr>
       </thead>
       <tbody>
-        {rows.map(({ station: s, assessment: a }) => (
+        {rows.map(({ plan, result: r, links, worstBackupPct }) => (
           // the whole row takes the pointer; the button inside keeps it reachable from the keyboard
-          <tr key={s.id} className={s.id === selectedId ? 'is-selected' : undefined} onClick={() => onSelect(s.id)}>
+          <tr key={plan.id} className={plan.id === selectedId ? 'is-selected' : undefined} onClick={() => onSelect(plan.id)}>
             <th scope="row">
-              <button className="rc-table__station" type="button" aria-pressed={s.id === selectedId}>
-                <i style={{ background: STATUS[a.status].color }} aria-hidden="true" />
+              <button className="rc-table__station" type="button" aria-pressed={plan.id === selectedId}>
+                <i style={{ background: STATUS[r.status].color }} aria-hidden="true" />
                 <span className="num" dir="ltr">
-                  {s.code}
+                  {plan.main.no}
                 </span>
-                <small>{s.district}</small>
+                {plan.demo && <small className="rc-demo-chip">تجريبي</small>}
               </button>
             </th>
             <td>
-              <span className={`rc-meter rc-status--${a.status}`}>
+              <span className={`rc-meter rc-status--${r.status}`}>
                 <i aria-hidden="true">
-                  <i style={{ width: `${a.capacityPct}%` }} />
+                  <i style={{ width: `${r.ratio * 100}%` }} />
                 </i>
                 <b className="num" dir="ltr">
-                  {a.capacityPct}%
+                  {ratioLabel(r.ratio)}
                 </b>
               </span>
             </td>
+            <td>{plan.level === 'feeder' ? 'مغذي' : 'محطة'}</td>
+            <td className="num">{plan.voltageKv}</td>
             <td className="num" dir="ltr">
-              {s.areaId}
+              {both(r.loadA, r.loadMva)}
             </td>
-            <td>{s.department ?? '—'}</td>
-            <td className="num" dir="ltr">
-              {s.type} · {s.voltageKv}
+            <td className="num">{fmt(r.totalSpareA)}</td>
+            <td className="num">{fmt(r.restorableA)}</td>
+            <td className={`num${r.unrestorableA > 0 ? ' rc-bad' : ''}`} dir="ltr">
+              {both(r.unrestorableA, r.unrestorableMva)}
             </td>
-            <td className="num">{fmt(a.loadMva, 1)}</td>
-            <td className="num">{fmt(a.firmCapacityMva)}</td>
-            <td className="num" dir="ltr">
-              {a.remotePct}%
+            <td>
+              <span className={`rc-status-text rc-status--${r.status}`}>{STATUS[r.status].label}</span>
             </td>
-            <td className="num">{fmt(a.unrestoredMw, 1)}</td>
-            <td className="num">{fmt(a.customersAtRisk)}</td>
-            <td className="num">{s.sensitiveCustomers.length}</td>
-            <td className="num">{s.vipCustomers.length}</td>
-            <td>{yesNo(a.n1)}</td>
-            <td className="num">{s.temporarySupplyMva > 0 ? fmt(s.temporarySupplyMva) : '—'}</td>
+            <td className="num">{links.length}</td>
+            <td className="num">
+              {worstBackupPct === null ? '—' : <span className={`rc-case__loading rc-case__loading--${loadingLevel(worstBackupPct)}`}>{loadingLabel(worstBackupPct)}</span>}
+            </td>
           </tr>
         ))}
       </tbody>

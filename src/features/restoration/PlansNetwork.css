@@ -1,0 +1,671 @@
+/* The network the backup plans make: its marks on the map, the assumptions every
+   figure rests on, the empty state, the bulk entry and the data menu.
+   Colours come from the theme tokens (--rc-*) in tokens.css. */
+
+/* ---------- top bar: what the data is, and what an admin may do to it ---------- */
+.rc-badge--real {
+  background: var(--rc-ok-soft);
+  color: var(--rc-ok-text);
+}
+
+.rc-badge--demo {
+  background: var(--rc-warn-soft);
+  color: var(--rc-warn-text);
+}
+
+.rc-menu {
+  position: relative;
+}
+
+.rc-menu__list {
+  position: absolute;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-end: 0;
+  z-index: 5;
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  max-width: min(340px, 100vw - 24px);
+  padding: 6px;
+  border-radius: 14px;
+}
+
+.rc-menu__list button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--rc-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.rc-menu__list button:hover {
+  background: var(--rc-raised-hover);
+}
+
+.rc-menu__list svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--rc-accent-strong);
+}
+
+.rc-menu__list small {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--rc-muted);
+}
+
+.rc-menu__list .is-danger,
+.rc-menu__list .is-danger svg {
+  color: var(--rc-bad-text);
+}
+
+.rc-btn--danger {
+  border-color: color-mix(in srgb, var(--rc-bad-text) 45%, transparent);
+  background: var(--rc-bad-soft);
+  color: var(--rc-bad-text);
+}
+
+/* ---------- assumptions: chips beside the title, controls in the filters ---------- */
+.rc-assumed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.rc-assumed > span {
+  padding: 1px 8px;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 99px;
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: nowrap;
+  color: var(--rc-text-2);
+}
+
+.rc-assumed b {
+  font-weight: 700;
+  color: var(--rc-heading);
+}
+
+/* an assumption that departs from the sheet as written is said louder */
+.rc-assumed > .is-on,
+.rc-assumed > .is-trial {
+  border-color: color-mix(in srgb, var(--rc-warn-text) 45%, transparent);
+  background: var(--rc-warn-soft);
+  color: var(--rc-warn-text);
+}
+
+.rc-assumed > .is-on b,
+.rc-assumed > .is-trial b {
+  color: inherit;
+}
+
+.rc-assumed:hover > span {
+  border-color: var(--rc-accent-line);
+}
+
+.rc-assumptions {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 12px;
+  background: var(--rc-fill);
+}
+
+.rc-assumptions > legend {
+  padding-inline: 6px;
+}
+
+.rc-assumptions__rating {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--rc-text-2);
+}
+
+.rc-assumptions__rating input {
+  width: 92px;
+  height: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 9px;
+  background: var(--rc-raised);
+  color: var(--rc-text-strong);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.rc-assumptions__trial {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--rc-warn-text);
+}
+
+.rc-assumptions__trial span {
+  margin-inline-end: auto;
+}
+
+/* ---------- KPI strip ---------- */
+.rc-kpi__sub {
+  font-size: 10.5px;
+  line-height: 1.5;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--rc-muted);
+}
+
+.rc-kpis--empty .rc-kpis__none b {
+  font-weight: 600;
+}
+
+/* ---------- the network on the map ---------- */
+/* Leaflet writes strokes as attributes, which a stylesheet overrides: links and
+   support-only rings take their colours from the theme, and a change of theme
+   redraws nothing. */
+.rc-net-casing {
+  stroke: var(--rc-link-casing);
+  stroke-width: 5px;
+  stroke-opacity: 0.85;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.rc-net-link {
+  stroke: var(--rc-link);
+  stroke-width: 2.5px;
+  stroke-opacity: 0.95;
+  stroke-linecap: round;
+  fill: none;
+  cursor: help;
+}
+
+.rc-net-link:hover {
+  stroke-width: 4.5px;
+}
+
+/* a plan is being read: the others stand back */
+.rc-net-casing.is-dimmed {
+  stroke-opacity: 0.5;
+}
+
+.rc-net-link.is-dimmed {
+  stroke-opacity: 0.45;
+}
+
+.rc-net-link--calm,
+.rc-net-support--calm,
+.rc-net-loading--calm {
+  --rc-link: var(--rc-link-calm);
+}
+
+.rc-net-link--near,
+.rc-net-support--near,
+.rc-net-loading--near {
+  --rc-link: var(--rc-link-near);
+}
+
+.rc-net-link--over,
+.rc-net-support--over,
+.rc-net-loading--over {
+  --rc-link: var(--rc-link-over);
+}
+
+.rc-net-loading--calm,
+.rc-net-loading--near,
+.rc-net-loading--over {
+  color: var(--rc-link);
+}
+
+/* a station that only backs others up: a small neutral ring */
+.rc-net-support {
+  stroke: var(--rc-support-ring);
+  stroke-opacity: 1;
+  fill: var(--rc-raised);
+  filter: var(--rc-marker-filter);
+}
+
+.rc-net-support--near,
+.rc-net-support--over {
+  stroke: var(--rc-link);
+}
+
+.rc-map__label span.is-support {
+  border-style: dashed;
+  font-weight: 500;
+}
+
+/* the backups of the plan being read are numbered over the network's own marks */
+.rc-map .rc-plan-badge {
+  transform: translate(-11px, calc(-100% - 12px));
+}
+
+/* ---------- legend ---------- */
+.rc-legend__support {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 2.5px solid var(--rc-support-ring);
+  border-radius: 50%;
+  background: var(--rc-raised);
+}
+
+.rc-legend__link {
+  flex: none;
+  width: 24px;
+  height: 0;
+  border-top: 3px solid var(--rc-link);
+  border-radius: 2px;
+}
+
+/* ---------- elements without a place ---------- */
+.rc-unplaced {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-start: 0;
+  display: grid;
+  gap: 2px;
+  max-width: min(100%, 360px);
+  padding: 7px 12px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  color: var(--rc-text-2);
+}
+
+.rc-unplaced p {
+  margin: 0;
+}
+
+.rc-unplaced b {
+  margin-inline-end: 4px;
+  color: var(--rc-warn-text);
+}
+
+/* ---------- no plans yet ---------- */
+.rc-empty {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: min(460px, 100%);
+  padding: 26px 24px 20px;
+  border-radius: 18px;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.rc-empty > svg {
+  color: var(--rc-accent-strong);
+}
+
+.rc-empty h2 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--rc-heading);
+}
+
+.rc-empty p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--rc-text-2);
+}
+
+.rc-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.rc-empty .rc-empty__coverage {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rc-line-soft);
+  width: 100%;
+  font-size: 12.5px;
+  color: var(--rc-muted);
+}
+
+.rc-empty__coverage b {
+  color: var(--rc-heading);
+}
+
+.rc-empty__close {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+}
+
+/* ---------- the priority table ---------- */
+.rc-table td small {
+  font-size: 0.85em;
+  color: var(--rc-muted);
+}
+
+.rc-table__station .rc-demo-chip {
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.rc-status-text {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---------- a station that only backs others up ---------- */
+.rc-support th .rc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.rc-plan__also {
+  display: grid;
+  gap: 6px;
+}
+
+.rc-plan__also h4 {
+  margin: 0;
+  font-size: 13px;
+  color: var(--rc-heading);
+}
+
+/* ---------- methodology ---------- */
+.rc-method {
+  padding-inline-start: 18px;
+}
+
+.rc-method h3 {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  color: var(--rc-heading);
+}
+
+.rc-method ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-inline-start: 20px;
+}
+
+/* ---------- bulk entry ---------- */
+.rc-dialog.rc-bulk {
+  width: min(920px, 100% - 24px);
+}
+
+.rc-bulk__format {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--rc-text-2);
+}
+
+.rc-bulk__format > span {
+  padding: 6px 10px;
+  border: 1px dashed var(--rc-line-strong);
+  border-radius: 9px;
+  background: var(--rc-fill);
+  font-weight: 600;
+  color: var(--rc-heading);
+}
+
+.rc-bulk__format small {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--rc-muted);
+}
+
+.rc-bulk__paste {
+  width: 100%;
+  min-height: 170px;
+  padding: 10px 12px;
+  border: 1px solid var(--rc-line-strong);
+  border-radius: 12px;
+  background: var(--rc-fill);
+  color: var(--rc-text-strong);
+  font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  tab-size: 8;
+  white-space: pre;
+  resize: vertical;
+}
+
+.rc-bulk__paste.is-over {
+  border-color: var(--rc-accent-line);
+  background: var(--rc-accent-soft);
+}
+
+.rc-bulk__sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.rc-bulk__sources label {
+  position: relative;
+  cursor: pointer;
+}
+
+.rc-bulk__sources input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.rc-bulk__sources .rc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rc-bulk__sources small {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--rc-muted);
+}
+
+.rc-bulk__totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.rc-bulk__totals > div {
+  padding: 9px 12px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 11px;
+  background: var(--rc-fill);
+}
+
+.rc-bulk__totals dt {
+  font-size: 11.5px;
+  color: var(--rc-muted);
+}
+
+.rc-bulk__totals dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--rc-text-2);
+}
+
+.rc-bulk__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  font-size: 12.5px;
+}
+
+.rc-bulk__all {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--rc-text-2);
+}
+
+.rc-bulk__scroll {
+  max-height: 46dvh;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 12px;
+  overflow: auto;
+}
+
+.rc-bulk__table {
+  width: 100%;
+}
+
+.rc-bulk__table th,
+.rc-bulk__table td {
+  vertical-align: top;
+}
+
+.rc-bulk__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--rc-raised);
+}
+
+.rc-bulk__table .is-skipped > :not(:last-child) {
+  opacity: 0.45;
+}
+
+.rc-bulk__table small {
+  color: var(--rc-muted);
+}
+
+.rc-bulk__ok {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rc-ok-text);
+}
+
+.rc-bulk__notes {
+  display: grid;
+  gap: 2px;
+  min-width: 190px;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--rc-warn-text);
+}
+
+.rc-bulk__notes--bad {
+  color: var(--rc-bad-text);
+}
+
+.rc-bulk__table .rc-segment button {
+  min-height: 28px;
+  padding-inline: 10px;
+  font-size: 12px;
+}
+
+/* ---------- removing the old synthetic network ---------- */
+.rc-cleanup p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--rc-text-2);
+}
+
+.rc-cleanup__counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rc-cleanup__counts li {
+  padding: 8px 12px;
+  border: 1px solid var(--rc-line-soft);
+  border-radius: 10px;
+  background: var(--rc-fill);
+  font-size: 13px;
+  color: var(--rc-text-2);
+}
+
+.rc-cleanup__counts b {
+  margin-inline-end: 4px;
+  font-size: 16px;
+  color: var(--rc-heading);
+}
+
+.rc-cleanup .rc-cleanup__keep,
+.rc-cleanup .rc-cleanup__clean {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--rc-ok-soft);
+  color: var(--rc-ok-text);
+  font-size: 13px;
+}
+
+.rc-cleanup__keep svg,
+.rc-cleanup__clean svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+@media (max-width: 640px) {
+  /* what is wrong with a row matters more than its line number */
+  .rc-bulk__table th:first-child,
+  .rc-bulk__table td:first-child {
+    display: none;
+  }
+
+  .rc-bulk__notes {
+    min-width: 120px;
+  }
+}
+
+@media (max-width: 1099.98px) {
+  /* the page scrolls here: the card sits on the map, not in the middle of the window */
+  .rc-empty {
+    padding: 20px 16px 16px;
+  }
+
+  .rc-unplaced {
+    inset-block-end: auto;
+    inset-block-start: 0;
+    inset-inline-start: 56px;
+    max-width: calc(100% - 64px);
+  }
+}

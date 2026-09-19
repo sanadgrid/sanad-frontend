@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { StationPoint } from './backup/directory'
-import { compact, draftOf, pick, type PlanDraft } from './backup/draft'
+import { compact, draftOf, pick, type DraftRow, type PlanDraft } from './backup/draft'
 import type { BackupCase } from './backup/model'
 import type { LatLng } from './types'
 
@@ -18,6 +18,8 @@ export interface PlanEditor {
   /** A place to point out on the map: the option of a duplicate number under the pointer. */
   hover: LatLng | null
   open: (initial?: BackupCase) => void
+  /** A new plan whose main element is already known: a station clicked on the map. */
+  openFor: (main: Pick<DraftRow, 'no' | 'load' | 'at' | 'layerId'>) => void
   close: () => void
   change: (change: (draft: PlanDraft) => PlanDraft) => void
   startPicking: () => void
@@ -43,6 +45,10 @@ export function usePlanEditor(): PlanEditor {
   const [hover, setHover] = useState<LatLng | null>(null)
 
   const open = useCallback((initial?: BackupCase) => setEditing({ draft: draftOf(initial, newId()), isNew: !initial, before: null }), [])
+  const openFor = useCallback((main: Pick<DraftRow, 'no' | 'load' | 'at' | 'layerId'>) => {
+    const draft = draftOf(undefined, newId())
+    setEditing({ draft: { ...draft, main: { ...draft.main, ...main } }, isNew: true, before: null })
+  }, [])
   const close = useCallback(() => {
     setEditing(null)
     setHover(null)
@@ -72,6 +78,7 @@ export function usePlanEditor(): PlanEditor {
       picking: Boolean(editing?.before),
       hover,
       open,
+      openFor,
       close,
       change,
       startPicking,
@@ -80,6 +87,6 @@ export function usePlanEditor(): PlanEditor {
       pick: pickPoint,
       setHover,
     }),
-    [editing, hover, open, close, change, startPicking, finishPicking, cancelPicking, pickPoint],
+    [editing, hover, open, openFor, close, change, startPicking, finishPicking, cancelPicking, pickPoint],
   )
 }

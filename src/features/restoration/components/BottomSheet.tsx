@@ -1,15 +1,14 @@
 import { useState, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
 import { fmt } from '../labels'
-import { NO_NETWORK } from './KpiCards'
 
 interface BottomSheetProps {
   open: boolean
   onToggle: () => void
-  /** Rows in the table, and how many stations match the filters (the CSV holds all of them). */
+  /** Rows in the table, and how many plans match the filters (the file holds all of them). */
   listedCount: number
   visibleCount: number
-  /** No network is on the map: nothing to rank. */
+  /** No plans yet: nothing to rank. */
   empty?: boolean
   onExport: () => void
   table: ReactNode
@@ -33,7 +32,7 @@ export function BottomSheet({ open, onToggle, listedCount, visibleCount, empty, 
         <p>
           <Icon name="chart" size={16} />
           <b>أولويات التعزيز</b>
-          <span>{NO_NETWORK}</span>
+          <span>تظهر هنا الخطط مرتبة من الأضعف، بعد إضافة أول خطة.</span>
         </p>
       </section>
     )
@@ -44,8 +43,8 @@ export function BottomSheet({ open, onToggle, listedCount, visibleCount, empty, 
         <button className="rc-sheet__handle" type="button" aria-expanded={open} aria-controls="rc-sheet-body" onClick={onToggle}>
           <Icon name="chart" size={16} />
           <span className="rc-sheet__title">أولويات التعزيز</span>
-          <span className="rc-count rc-count--quiet" title="المحطات المطابقة لخيارات التصفية">
-            <span className="num">{fmt(visibleCount)}</span> محطة
+          <span className="rc-count rc-count--quiet" title="الخطط المطابقة لخيارات التصفية">
+            <span className="num">{fmt(visibleCount)}</span> خطة
           </span>
           <Icon name={open ? 'chevronDown' : 'chevronUp'} size={17} />
         </button>
@@ -62,11 +61,11 @@ export function BottomSheet({ open, onToggle, listedCount, visibleCount, empty, 
             <p className="rc-sheet__note">
               {tab === 'priority' ? (
                 <>
-                  أضعف <span className="num">{fmt(listedCount)}</span> محطات من أصل{' '}
-                  <span className="num">{fmt(visibleCount)}</span> ظاهرة — مرتبة بقدرة الاستعادة ثم بالحمل غير المستعاد.
+                  أضعف <span className="num">{fmt(listedCount)}</span> من أصل <span className="num">{fmt(visibleCount)}</span> خطة ظاهرة — مرتبة
+                  بنسبة الاستعادة ثم بالحمل غير القابل للاستعادة.
                 </>
               ) : (
-                'كيف تُحسب قدرة الاستعادة لكل محطة.'
+                'ما الذي يُحسب في كل خطة، وما الذي لا يُحسب.'
               )}
             </p>
             <button className="rc-btn rc-sheet__export" type="button" onClick={onExport} disabled={visibleCount === 0}>

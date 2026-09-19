@@ -102,5 +102,7 @@ function updatePlan(sectorId: string, changes: PlanChange[]): Promise<BackupPlan
 
 // The rules only accept these from an admin. Each resolves with the plan as written.
 export const saveBackupCase = (sectorId: string, saved: BackupCase) => updatePlan(sectorId, [{ upsert: saved }])
+/** Many cases at once — a bulk entry: still one read and one write, whatever their number. */
+export const saveBackupCases = (sectorId: string, saved: BackupCase[]) => updatePlan(sectorId, saved.map((upsert) => ({ upsert })))
 export const deleteBackupCase = (sectorId: string, caseId: string) => updatePlan(sectorId, [{ remove: caseId }])
 export const setDefaultRating = (sectorId: string, ratingA: number) => updatePlan(sectorId, [{ ratingA }])

@@ -1,20 +1,18 @@
 import { Icon } from '../../../components/Icon'
-import type { Layers } from '../filters'
 import { STATUS, STATUS_ORDER } from '../labels'
-import { themeColors } from '../mapTheme'
-import type { Theme } from '../useTheme'
 
 interface MapLegendProps {
-  layers: Layers
-  theme: Theme
   open: boolean
   onToggle: () => void
 }
 
-export function MapLegend({ layers, theme, open, onToggle }: MapLegendProps) {
-  // the swatches take the colours the map itself draws with
-  const colors = themeColors(theme)
+const LINKS = [
+  { level: 'calm', label: 'تحميل البديل حتى', range: '80%' },
+  { level: 'near', label: 'تحميل البديل', range: '80–100%' },
+  { level: 'over', label: 'البديل فوق سعته', range: '>100%' },
+]
 
+export function MapLegend({ open, onToggle }: MapLegendProps) {
   if (!open)
     return (
       <button className="rc-float rc-legend-toggle" type="button" aria-expanded={false} onClick={onToggle}>
@@ -42,39 +40,23 @@ export function MapLegend({ layers, theme, open, onToggle }: MapLegendProps) {
           </li>
         ))}
         <li>
-          <i className="rc-legend__dot rc-legend__dot--size" /> حجم الدائرة = حمل المحطة
+          <i className="rc-legend__dot rc-legend__dot--size" /> حجم الدائرة = حمل العنصر الرئيسي
+        </li>
+        <li>
+          <i className="rc-legend__support" /> بديل فقط — الرقم بجانبه أعلى تحميل له
         </li>
       </ul>
-      {layers.ties && (
-        <ul>
-          <li>
-            <i className="rc-legend__line" style={{ color: colors.tieUnderground }} /> ربط أرضي
+      <ul>
+        {LINKS.map(({ level, label, range }) => (
+          <li key={level}>
+            <i className={`rc-legend__link rc-net-link--${level}`} />
+            {label}
+            <span className="num" dir="ltr">
+              {range}
+            </span>
           </li>
-          <li>
-            <i className="rc-legend__line rc-legend__line--overhead" style={{ color: colors.tieOverhead }} /> ربط هوائي
-          </li>
-          <li>
-            <i className="rc-legend__line rc-legend__line--double" style={{ color: colors.tieUnderground }} /> دائرتان
-          </li>
-          <li>
-            <i className="rc-legend__line" style={{ color: colors.tieWeak }} /> ربط بمحطة ضعيفة الاستعادة
-          </li>
-        </ul>
-      )}
-      {(layers.sensitive || layers.vip) && (
-        <ul>
-          {layers.sensitive && (
-            <li>
-              <i className="rc-legend__ring" style={{ color: colors.sensitive }} /> مشتركون حساسون
-            </li>
-          )}
-          {layers.vip && (
-            <li>
-              <i className="rc-legend__ring rc-legend__ring--dashed" style={{ color: colors.vip }} /> كبار المشتركين
-            </li>
-          )}
-        </ul>
-      )}
+        ))}
+      </ul>
     </section>
   )
 }

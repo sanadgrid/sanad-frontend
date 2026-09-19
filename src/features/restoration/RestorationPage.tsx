@@ -1,24 +1,29 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import type { Access } from '../../services/access'
 import { signOutUser, type AuthUser } from '../../services/auth'
-import { listSectors, loadNetwork, seedNetwork, type LoadedNetwork, type LoadResult, type SectorSummary } from '../../services/restoration'
+import { listSectors } from '../../services/sectors'
+import { dataKind } from './backup/planNetwork'
+import type { DataAction } from './components/DataMenu'
 import { TopBar } from './components/TopBar'
 import { Dashboard } from './Dashboard'
-import { demoNetwork } from './demoData'
+import { builtInSectors, DEFAULT_SECTOR_ID, sectorInfo, type SectorSummary } from './sectors'
 import { useBackupPlans } from './useBackupPlans'
 import { useBasemap } from './useBasemap'
-import { useDemoNetwork } from './useDemoNetwork'
 import { useMapLayers } from './useMapLayers'
 import { useTheme } from './useTheme'
 import './RestorationPage.css'
+import './PlansNetwork.css'
 
-// Only admins ever open it, so the file reader is not part of everyone's download.
+// Only admins ever open them, so the file reader and the clean-up are not part of everyone's download.
 const ImportDialog = lazy(() => import('./components/ImportDialog').then((m) => ({ default: m.ImportDialog })))
+const CleanupDialog = lazy(() => import('./components/CleanupDialog').then((m) => ({ default: m.CleanupDialog })))
 
 interface Toast {
   kind: 'ok' | 'error' | 'notice'
   text: string
 }
+
+type AdminDialog = 'import' | 'cleanup' | null
 
 const TOAST_MS = 6000
 const PAGE_TITLE = 'قدرة استعادة الخدمة — SanadGrid'
@@ -26,8 +31,6 @@ const PAGE_TITLE = 'قدرة استعادة الخدمة — SanadGrid'
 // What people read when something fails. The technical reason (provider codes,
 // rule denials) is for the console only.
 const SIGN_OUT_FAILED = 'تعذّر تسجيل الخروج. حاول مرة أخرى.'
-const PUBLISH_DONE = 'تم نشر البيانات'
-const PUBLISH_FAILED = 'تعذّر نشر البيانات. تأكد من صلاحياتك وحاول مرة أخرى.'
 const LAYER_DELETED = 'تم حذف الطبقة'
 const LAYER_DELETE_FAILED = 'تعذّر حذف الطبقة. تأكد من صلاحياتك وحاول مرة أخرى.'
 const TWINS_DELETED = 'تم حذف الطبقات المكررة'
@@ -42,12 +45,13 @@ class StoppedDeleting extends Error {
   }
 }
 const PLAN_SAVED = 'تم حفظ الخطة'
+const PLANS_SAVED = 'تم حفظ الخطط'
 const PLAN_DELETED = 'تم حذف الخطة'
 const RATING_SAVED = 'تم حفظ سعة القاطع المعتمدة'
 const PLAN_WRITE_FAILED = 'تعذّر حفظ التغيير. تأكد من صلاحياتك وحاول مرة أخرى.'
-const LOAD_NOTICE: Record<NonNullable<LoadedNetwork['notice']>, string> = {
-  stale: 'تعذّر تحديث البيانات الآن. تُعرض آخر نسخة محفوظة.',
-  unavailable: 'تعذّر الوصول إلى البيانات الآن. تُعرض بيانات تجريبية مؤقتاً.',
+const PLANS_NOTICE = {
+  stale: 'تعذّر تحديث الخطط الآن. تُعرض آخر نسخة محفوظة.',
+  unavailable: 'تعذّر الوصول إلى الخطط الآن. حاول مرة أخرى بعد قليل.',
 }
 
 interface RestorationPageProps {
@@ -62,17 +66,14 @@ interface RestorationPageProps {
 export function RestorationPage({ user, access, onAccessLost }: RestorationPageProps) {
   const isAdmin = access.role === 'admin'
   // a member starts in a sector of their own: asking for any other one would be refused
-  const [sectorId, setSectorId] = useState((access.role === 'member' && access.sectors[0]) || demoNetwork.sector.id)
-  const [sectors, setSectors] = useState<SectorSummary[]>([])
-  const [loaded, setLoaded] = useState<LoadedNetwork | null>(null)
-  const [importing, setImporting] = useState(false)
-  // bumped after an upload so the network is read again
-  const [revision, setRevision] = useState(0)
+  const [sectorId, setSectorId] = useState((access.role === 'member' && access.sectors[0]) || DEFAULT_SECTOR_ID)
+  const [sectors, setSectors] = useState<SectorSummary[]>(builtInSectors)
+  const [dialog, setDialog] = useState<AdminDialog>(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
   const [theme, toggleTheme] = useTheme()
   const [basemap, setBasemap] = useBasemap()
-  const [demoNetworkShown, showDemoNetwork] = useDemoNetwork()
 
   useEffect(() => {
     const previous = document.title
@@ -86,34 +87,24 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
   useEffect(() => {
     let cancelled = false
     listSectors(access).then((list) => {
-      if (cancelled) return
+      if (cancelled || list.length === 0) return
       setSectors(list)
       setSectorId((current) => (list.some((s) => s.id === current) ? current : list[0].id))
     })
     return () => {
       cancelled = true
     }
-  }, [access, uid, revision])
+  }, [access, uid])
 
-  useEffect(() => {
-    let cancelled = false
-    // called once with what can be shown at once, and again if the database holds something newer
-    const show = (result: LoadResult) => {
-      if (cancelled) return
-      if (result === 'denied') return onAccessLost()
-      setLoaded(result)
-      if (result.notice) setToast({ kind: 'notice', text: LOAD_NOTICE[result.notice] })
-    }
-    loadNetwork(sectorId, show).then(show)
-    return () => {
-      cancelled = true
-    }
-  }, [sectorId, uid, revision, onAccessLost])
-
-  // the layers follow the network on screen, which is the demo sector when the chosen one has no data
-  const sector = loaded?.network.sector
-  const mapLayers = useMapLayers(sector?.id, uid)
-  const backupPlans = useBackupPlans(sector?.id, uid)
+  // name, map centre and derating come with the page; the database may only rename the sector
+  const sector = useMemo(() => sectorInfo(sectorId, sectors.find((s) => s.id === sectorId)), [sectorId, sectors])
+  const mapLayers = useMapLayers(sectorId, uid)
+  // The plans are what the page shows. Refused: whatever let this user in no longer
+  // holds, and the gate asks again. Unreachable: said once, quietly.
+  const backupPlans = useBackupPlans(sectorId, uid, (notice) => {
+    if (notice === 'denied') onAccessLost()
+    else setToast({ kind: 'notice', text: PLANS_NOTICE[notice] })
+  })
 
   useEffect(() => {
     if (!toast) return
@@ -148,72 +139,59 @@ export function RestorationPage({ user, access, onAccessLost }: RestorationPageP
       TWINS_DELETED,
     )
 
-  const seed = () =>
-    run(
-      async () => {
-        await seedNetwork(demoNetwork)
-        setRevision((r) => r + 1)
-      },
-      PUBLISH_FAILED,
-      PUBLISH_DONE,
-    )
+  const dataActions: DataAction[] = isAdmin
+    ? [
+        { id: 'import', icon: 'layers', label: 'استيراد طبقات الخريطة', hint: 'ملفات Google Earth', onSelect: () => setDialog('import') },
+        ...(backupPlans.available ? [{ id: 'bulk', icon: 'table' as const, label: 'إدخال جماعي للخطط', hint: 'لصق من جدول أو ملف CSV', onSelect: () => setBulkOpen(true) }] : []),
+        { id: 'cleanup', icon: 'trash', label: 'حذف بيانات الشبكة التجريبية القديمة', hint: 'الشبكة المصطنعة السابقة فقط', danger: true, onSelect: () => setDialog('cleanup') },
+      ]
+    : []
 
   return (
     <div className="rc" data-theme={theme} data-basemap={basemap}>
       <TopBar
-        source={loaded?.source ?? null}
-        synthetic={demoNetworkShown && sector?.visibility === 'public'}
+        dataKind={dataKind(backupPlans.plan?.cases ?? [])}
         sectors={sectors}
         sectorId={sectorId}
         user={user}
         busy={busy}
-        canImport={isAdmin && Boolean(sector)}
-        canPublish={isAdmin}
+        dataActions={dataActions}
         theme={theme}
         onToggleTheme={toggleTheme}
         onSectorChange={setSectorId}
         onSignOut={() => run(signOutUser, SIGN_OUT_FAILED)}
-        onSeed={seed}
-        onImport={() => setImporting(true)}
       />
 
       <main className="rc-main">
-        {loaded ? (
-          // a different network starts from clean filters and no selection
-          <Dashboard
-            key={`${loaded.network.sector.id}:${loaded.source}`}
-            network={loaded.network}
-            theme={theme}
-            imported={mapLayers}
-            plans={backupPlans}
-            basemap={basemap}
-            demoNetwork={demoNetworkShown}
-            isAdmin={isAdmin}
-            busy={busy}
-            onBasemap={setBasemap}
-            onDemoNetwork={showDemoNetwork}
-            onDeleteLayer={(layerId) => run(() => mapLayers.remove(layerId), LAYER_DELETE_FAILED, LAYER_DELETED)}
-            onDeleteLayers={deleteLayers}
-            onSavePlan={(saved) => run(() => backupPlans.save(saved), PLAN_WRITE_FAILED, PLAN_SAVED)}
-            onDeletePlan={(caseId) => run(() => backupPlans.remove(caseId), PLAN_WRITE_FAILED, PLAN_DELETED)}
-            onPlanRating={(ratingA) => run(() => backupPlans.setRating(ratingA), PLAN_WRITE_FAILED, RATING_SAVED)}
-          />
-        ) : (
-          <p className="rc-loading" role="status">
-            جارٍ تحميل بيانات الشبكة…
-          </p>
-        )}
+        {/* another sector starts from clean filters and no selection */}
+        <Dashboard
+          key={sectorId}
+          sector={sector}
+          theme={theme}
+          imported={mapLayers}
+          plans={backupPlans}
+          basemap={basemap}
+          isAdmin={isAdmin}
+          busy={busy}
+          bulkOpen={bulkOpen && isAdmin}
+          onBulk={setBulkOpen}
+          onBasemap={setBasemap}
+          onDeleteLayer={(layerId) => run(() => mapLayers.remove(layerId), LAYER_DELETE_FAILED, LAYER_DELETED)}
+          onDeleteLayers={deleteLayers}
+          onSavePlan={(saved) => run(() => backupPlans.save(saved), PLAN_WRITE_FAILED, PLAN_SAVED)}
+          onSavePlans={(saved) => run(() => backupPlans.saveMany(saved), PLAN_WRITE_FAILED, PLANS_SAVED)}
+          onDeletePlan={(caseId) => run(() => backupPlans.remove(caseId), PLAN_WRITE_FAILED, PLAN_DELETED)}
+          onPlanRating={(ratingA) => run(() => backupPlans.setRating(ratingA), PLAN_WRITE_FAILED, RATING_SAVED)}
+        />
       </main>
 
-      {importing && sector && (
+      {dialog && isAdmin && (
         <Suspense fallback={null}>
-          <ImportDialog
-            sectorId={sector.id}
-            sectorName={sector.nameAr}
-            center={sector.center}
-            onImported={mapLayers.refresh}
-            onClose={() => setImporting(false)}
-          />
+          {dialog === 'import' ? (
+            <ImportDialog sectorId={sector.id} sectorName={sector.nameAr} center={sector.center} onImported={mapLayers.refresh} onClose={() => setDialog(null)} />
+          ) : (
+            <CleanupDialog sectorId={sector.id} sectorName={sector.nameAr} onClose={() => setDialog(null)} />
+          )}
         </Suspense>
       )}
 

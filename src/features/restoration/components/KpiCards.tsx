@@ -1,17 +1,18 @@
 import type { ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
+import { ratioLabel } from '../backup/format'
+import type { Coverage, PlanKpis } from '../backup/planNetwork'
 import { fmt, STATUS, STATUS_ORDER } from '../labels'
-import type { Summary } from '../summary'
 
 interface KpiCardsProps {
-  summary: Summary
-  /** Stations in the sector, before filtering. */
+  kpis: PlanKpis
+  /** Cases in the sector, before filtering. */
   total: number
-  /** No network is on the map: there is nothing to work the figures out from. */
-  empty?: boolean
-  /** What the figures are about: the sector, and the period and scenario they are computed for. */
+  coverage: Coverage
   sectorName: string
-  conditionsLabel: string
+  /** The assumptions every figure rests on, as small chips beside the title. */
+  assumptions: ReactNode
+  loading: boolean
   open: boolean
   onToggle: () => void
 }
@@ -20,12 +21,14 @@ interface KpiProps {
   label: ReactNode
   value: string
   unit?: string
+  /** A second, smaller line: the same figure in another unit. */
+  sub?: string
   tone?: 'ok' | 'warn' | 'bad'
   /** The longer explanation, shown on hover so the tile stays small. */
   hint: string
 }
 
-function Kpi({ label, value, unit, tone, hint }: KpiProps) {
+function Kpi({ label, value, unit, sub, tone, hint }: KpiProps) {
   return (
     <div className={`rc-kpi${tone ? ` rc-kpi--${tone}` : ''}`} title={hint}>
       <span className="rc-kpi__label">{label}</span>
@@ -33,16 +36,21 @@ function Kpi({ label, value, unit, tone, hint }: KpiProps) {
         {value}
         {unit && <small> {unit}</small>}
       </strong>
+      {sub && (
+        <span className="rc-kpi__sub num" dir="ltr">
+          {sub}
+        </span>
+      )}
     </div>
   )
 }
 
 // conic-gradient stops built from the status counts
-function donutGradient(summary: Summary): string {
-  if (summary.stations === 0) return 'var(--rc-track)'
+function donutGradient(kpis: PlanKpis): string {
+  if (kpis.cases === 0) return 'var(--rc-track)'
   let from = 0
   const stops = STATUS_ORDER.map((status) => {
-    const to = from + (summary.byStatus[status] / summary.stations) * 100
+    const to = from + (kpis.byStatus[status] / kpis.cases) * 100
     const stop = `${STATUS[status].color} ${from}% ${to}%`
     from = to
     return stop
@@ -50,114 +58,128 @@ function donutGradient(summary: Summary): string {
   return `conic-gradient(${stops.join(', ')})`
 }
 
-const toneFor = (pct: number) => (pct >= 99.5 ? 'ok' : pct >= 70 ? 'warn' : 'bad')
-const n1 = <span dir="ltr">N-1</span>
+const TONE = { full: 'ok', high: 'warn', limited: 'bad', none: 'bad' } as const
 
-/** Said wherever figures of the network would stand, while there is no real network to work them out from. */
-export const NO_NETWORK = 'لا توجد بيانات شبكة فعلية بعد'
+/** How much of the imported network has a plan yet — said wherever the figures are, so nobody takes them for the whole sector. */
+export function CoverageLine({ coverage }: { coverage: Coverage }) {
+  if (coverage.imported === 0) return <>لا توجد محطات مستوردة بعد</>
+  return (
+    <>
+      <b className="num">{fmt(coverage.planned)}</b> من <b className="num">{fmt(coverage.imported)}</b> محطة لها خطة
+    </>
+  )
+}
 
-export function KpiCards({ summary, total, empty, sectorName, conditionsLabel, open, onToggle }: KpiCardsProps) {
-  if (empty)
+export function KpiCards({ kpis, total, coverage, sectorName, assumptions, loading, open, onToggle }: KpiCardsProps) {
+  const lead = (
+    <div className="rc-kpis__lead">
+      <h1 className="rc-title">قدرة استعادة الخدمة</h1>
+      <p>{sectorName}</p>
+      {assumptions}
+    </div>
+  )
+
+  if (loading || total === 0)
     return (
-      <section className="rc-float rc-kpis rc-kpis--empty" aria-label="مؤشرات المحطات">
-        <div className="rc-kpis__lead">
-          <h1 className="rc-title">قدرة استعادة الخدمة</h1>
-          <p>{sectorName}</p>
-        </div>
-        <p className="rc-kpis__none">
-          <b>{NO_NETWORK}</b>
-          <span>الخريطة تعرض الطبقات المستوردة وخطط التغذية البديلة.</span>
+      <section className="rc-float rc-kpis rc-kpis--empty" aria-label="مؤشرات خطط التغذية البديلة">
+        {lead}
+        <p className="rc-kpis__none" role={loading ? 'status' : undefined}>
+          {loading ? (
+            <b>جارٍ تحميل خطط التغذية البديلة…</b>
+          ) : (
+            <>
+              <b>لا توجد خطط تغذية بديلة بعد</b>
+              <span>
+                <CoverageLine coverage={coverage} />
+              </span>
+            </>
+          )}
         </p>
       </section>
     )
 
-  const capacityTone = summary.stations ? toneFor(summary.capacityPct) : undefined
+  const tone = kpis.cases ? TONE[kpis.status] : undefined
 
   // folded away: the two figures an operator glances at, and the way back
   if (!open)
     return (
-      <button
-        className="rc-float rc-kpis-pill"
-        type="button"
-        aria-expanded={false}
-        aria-label="إظهار المؤشرات"
-        onClick={onToggle}
-      >
-        <span className={`rc-kpis-pill__figure${capacityTone ? ` rc-kpi--${capacityTone}` : ''}`}>
+      <button className="rc-float rc-kpis-pill" type="button" aria-expanded={false} aria-label="إظهار المؤشرات" onClick={onToggle}>
+        <span className={`rc-kpis-pill__figure${tone ? ` rc-kpi--${tone}` : ''}`}>
           <i aria-hidden="true" />
-          قدرة الاستعادة
+          نسبة الاستعادة
           <b className="num" dir="ltr">
-            {fmt(summary.capacityPct, 1)}%
+            {ratioLabel(kpis.ratio, 1)}
           </b>
         </span>
-        <span className={`rc-kpis-pill__figure rc-kpi--${summary.failingN1 ? 'bad' : 'ok'}`}>
+        <span className={`rc-kpis-pill__figure rc-kpi--${kpis.below100 ? 'bad' : 'ok'}`}>
           <i aria-hidden="true" />
-          <b className="num">{fmt(summary.failingN1)}</b>
-          لا تحقق {n1}
+          <b className="num">{fmt(kpis.below100)}</b>
+          أقل من <span dir="ltr">100%</span>
         </span>
         <Icon name="chevronDown" size={16} />
       </button>
     )
 
   return (
-    <section className="rc-float rc-kpis" aria-label="مؤشرات المحطات الظاهرة">
-      <div className="rc-kpis__lead">
-        <h1 className="rc-title">قدرة استعادة الخدمة</h1>
-        <p>
-          {sectorName} · {conditionsLabel}
-        </p>
-      </div>
+    <section className="rc-float rc-kpis" aria-label="مؤشرات الخطط الظاهرة">
+      {lead}
 
       <div className="rc-kpis__tiles">
         <Kpi
-          label="متوسط قدرة الاستعادة"
-          value={fmt(summary.capacityPct, 1)}
+          label="نسبة الاستعادة"
+          value={ratioLabel(kpis.ratio, 1).replace('%', '')}
           unit="%"
-          tone={capacityTone}
-          hint="متوسط قدرة الاستعادة موزوناً بحمل كل محطة — ماذا يحدث لو فُقدت المحطة بالكامل؟"
+          tone={tone}
+          hint="مجموع ما يمكن استعادته ÷ مجموع أحمال العناصر الرئيسية — كل خطة موزونة بحملها"
+        />
+        <Kpi label="مجموع الأحمال" value={fmt(kpis.loadA)} unit="A" sub={`${fmt(kpis.loadMva, 1)} MVA`} hint="مجموع أحمال العناصر الرئيسية في الخطط الظاهرة" />
+        <Kpi
+          label="غير القابل للاستعادة"
+          value={fmt(kpis.unrestorableA)}
+          unit="A"
+          sub={`${fmt(kpis.unrestorableMva, 1)} MVA · ${fmt(kpis.unrestorableMw, 1)} MW`}
+          tone={kpis.unrestorableA > 0 ? 'bad' : 'ok'}
+          hint="مجموع ما يبقى بلا تغذية عند فقد كل عنصر رئيسي على حدة (MW بمعامل قدرة 0.9)"
         />
         <Kpi
-          label="الحمل غير المستعاد"
-          value={fmt(summary.unrestoredMw)}
-          unit="MW"
-          hint="إجمالي الحمل غير المستعاد: مجموع حالات فقد كل محطة على حدة"
+          label={
+            <>
+              خطط أقل من <span dir="ltr">100%</span>
+            </>
+          }
+          value={fmt(kpis.below100)}
+          tone={kpis.below100 ? 'bad' : 'ok'}
+          hint="خطط لا تكفي بدائلها لاستعادة كامل الحمل"
         />
         <Kpi
-          label="مشتركون معرضون للانقطاع"
-          value={fmt(summary.customersAtRisk)}
-          hint="المشتركون الذين يبقون بلا تغذية بعد استنفاد كل المناقلات"
+          label="بدائل تتجاوز سعتها"
+          value={fmt(kpis.overRated)}
+          tone={kpis.overRated ? 'warn' : 'ok'}
+          hint="بدائل حملها الحالي أعلى من سعة القاطع المعتمدة — لا تستقبل أي حمل"
         />
         <Kpi
-          label={<>محطات لا تحقق {n1}</>}
-          value={fmt(summary.failingN1)}
-          tone={summary.failingN1 ? 'bad' : 'ok'}
-          hint="محطات لا يمكن استعادة كامل حملها من الشبكة"
-        />
-        <Kpi
-          label={<>لا تحقق {n1} للمحولات</>}
-          value={fmt(summary.failingTransformerN1)}
-          tone={summary.failingTransformerN1 ? 'warn' : 'ok'}
-          hint="محطات حملها أعلى من السعة المؤكدة لمحولاتها"
+          label="التغطية"
+          value={fmt(coverage.planned)}
+          unit={`/ ${fmt(coverage.imported)}`}
+          sub="محطة لها خطة"
+          hint="عدد المحطات المستوردة التي لها خطة تغذية بديلة، من إجمالي المحطات المستوردة — الأرقام أعلاه تخص هذه المحطات فقط"
         />
 
         <div className="rc-kpi rc-kpi--donut">
-          <div className="rc-donut" style={{ background: donutGradient(summary) }} role="img" aria-label="توزيع حالات الاستعادة">
+          <div className="rc-donut" style={{ background: donutGradient(kpis) }} role="img" aria-label="توزيع الخطط حسب التصنيف">
             <div>
-              <strong className="num">{fmt(summary.stations)}</strong>
+              <strong className="num">{fmt(kpis.cases)}</strong>
             </div>
           </div>
           <div className="rc-donut__side">
             <span className="rc-kpi__label">
-              <span className="num">{fmt(summary.stations)}</span> من <span className="num">{fmt(total)}</span> محطة ·{' '}
-              <span className="num" dir="ltr">
-                {fmt(summary.loadMva)} MVA
-              </span>
+              <span className="num">{fmt(kpis.cases)}</span> من <span className="num">{fmt(total)}</span> خطة
             </span>
             <ul className="rc-donut__legend">
               {STATUS_ORDER.map((status) => (
                 <li key={status} title={STATUS[status].label}>
                   <i style={{ background: STATUS[status].color }} aria-hidden="true" />
-                  <b className="num">{fmt(summary.byStatus[status])}</b>
+                  <b className="num">{fmt(kpis.byStatus[status])}</b>
                   <span className="rc-sr">{STATUS[status].label}</span>
                 </li>
               ))}

@@ -2,21 +2,16 @@ import { useMemo, useState } from 'react'
 import { Icon } from '../../../components/Icon'
 import type { StationDirectory } from '../backup/directory'
 import { ordinal, ratioLabel } from '../backup/format'
-import { summarize, type BackupCase, type CaseResult, type GroupSummary } from '../backup/model'
+import { summarize, type BackupCase, type GroupSummary } from '../backup/model'
+import type { SupportLink } from '../backup/planNetwork'
 import { normalizeQuery } from '../import/stations'
 import { fmt, STATUS } from '../labels'
 import type { BackupPlans } from '../useBackupPlans'
 import type { PlanEditor } from '../usePlanEditor'
+import type { PlanRow } from '../usePlanNetwork'
 import { PlanDetail, Sensitivity, type SensitivityProps } from './PlanDetail'
 import { PlanForm } from './PlanForm'
 import { Toggle } from './Toggle'
-
-/** A case with its result as the team works it out, and under the period's thermal derating. */
-export interface PlanRow {
-  plan: BackupCase
-  plain: CaseResult
-  derated: CaseResult
-}
 
 interface BackupPlansPanelProps {
   plans: BackupPlans
@@ -26,17 +21,21 @@ interface BackupPlansPanelProps {
   editor: PlanEditor
   isAdmin: boolean
   busy: boolean
-  /** The engine's derating for the period on screen, and the period's name. */
+  /** The breaker rating in use: the sector's, or one being tried. */
+  ratingA: number
+  /** The derating of the chosen month, and the month's name. */
   derating: number
-  periodLabel: string
+  monthLabel: string
   deratingOn: boolean
+  /** What the selected plan's main element would itself take as a backup of others. */
+  supports: SupportLink[]
   selectedId: string | null
-  showAll: boolean
   onDerating: (on: boolean) => void
   /** `plan` when the list does not hold it yet: a case that was just saved. */
   onSelect: (caseId: string | null, plan?: BackupCase) => void
-  onShowAll: (on: boolean) => void
   onExport: () => void
+  /** Many plans at once, pasted from a spreadsheet. */
+  onBulk: () => void
   onShowOnMap: () => void
   /** The stations of the plan being written were picked on the map. */
   onPicked: () => void
@@ -93,9 +92,8 @@ function SummaryBlock({ total }: { total: GroupSummary }) {
 }
 
 export function BackupPlansPanel(props: BackupPlansPanelProps) {
-  const { plans, rows, directory, editor, isAdmin, busy, derating, periodLabel, deratingOn, selectedId, showAll } = props
+  const { plans, rows, directory, editor, isAdmin, busy, ratingA, derating, monthLabel, deratingOn, selectedId } = props
   const [ratingDraft, setRatingDraft] = useState<string | null>(null)
-  const ratingA = plans.plan?.ratingA ?? 400
   const selected = rows.find((row) => row.plan.id === selectedId) ?? null
 
   const totals = useMemo(() => {
@@ -113,10 +111,10 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
       <small className="rc-assume__note">
         {derating < 1 ? (
           <>
-            معامل فترة «{periodLabel}»: <span className="num" dir="ltr">× {derating.toFixed(2)}</span> من سعة القاطع
+            معامل شهر {monthLabel}: <span className="num" dir="ltr">× {derating.toFixed(2)}</span> من سعة القاطع
           </>
         ) : (
-          <>لا تخفيض حراري في فترة «{periodLabel}» — غيّر الفترة من خيارات التصفية.</>
+          <>لا تخفيض حراري في {monthLabel} — غيّر الشهر من خيارات التصفية.</>
         )}
       </small>
     </div>
@@ -178,6 +176,8 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
               if (await props.onDelete(selected.plan.id)) props.onSelect(null)
             }}
             onShowOnMap={props.onShowOnMap}
+            supports={props.supports}
+            onPlan={(caseId) => props.onSelect(caseId)}
           />
         ) : (
           <>
@@ -221,6 +221,12 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
                   إضافة خطة
                 </button>
               )}
+              {isAdmin && (
+                <button className="rc-btn" type="button" onClick={props.onBulk}>
+                  <Icon name="table" size={15} />
+                  إدخال جماعي
+                </button>
+              )}
               {rows.length > 0 && (
                 <button className="rc-btn" type="button" onClick={props.onExport}>
                   <Icon name="download" size={15} />
@@ -237,7 +243,6 @@ export function BackupPlansPanel(props: BackupPlansPanelProps) {
               )
             ) : (
               <>
-                <Toggle label="إظهار الكل على الخريطة" checked={showAll} onChange={props.onShowAll} />
                 <ul className="rc-plans__list">
                   {rows.map((row) => {
                     const r = deratingOn ? row.derated : row.plain

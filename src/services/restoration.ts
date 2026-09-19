@@ -11,15 +11,13 @@ import { demoNetwork } from '../features/restoration/demoData'
 import type { Feeder, LatLng, Network, Sector, Substation, Tie, Visibility } from '../features/restoration/types'
 import { isFirebaseConfigured } from '../lib/firebase'
 import { db } from '../lib/firestore'
-import type { Access } from './access'
 import { currentUid, isCurrentUserAdmin } from './auth'
 import { cache, networkKey, sectorsKey } from './cache'
 import { bundlePartId, joinBundle, mergeNetworks, partitionByVisibility, splitBundle, type BundlePart } from './networkBundle'
-import { countReads, isDenied, isUnreachable, serverDocs, shared, withTimeout } from './reads'
+import { countReads, isDenied, isUnreachable, serverDocs, withTimeout } from './reads'
 import { commit, WRITE_OVERHEAD_BYTES, type Write } from './writes'
 
 export type NetworkSource = 'firestore' | 'demo'
-export type SectorSummary = Pick<Sector, 'id' | 'nameAr' | 'nameEn'>
 
 export interface LoadedNetwork {
   network: Network
@@ -50,9 +48,6 @@ interface CachedNetwork {
 }
 
 const demo: LoadedNetwork = { network: demoNetwork, source: 'demo' }
-const demoSectors: SectorSummary[] = [
-  { id: demoNetwork.sector.id, nameAr: demoNetwork.sector.nameAr, nameEn: demoNetwork.sector.nameEn },
-]
 const live = (network: Network): LoadedNetwork => ({ network, source: 'firestore' })
 
 // Firestore stores positions as GeoPoint; the app works with plain { lat, lng }.
@@ -268,48 +263,6 @@ export async function loadNetwork(sectorId: string, onRefresh: (result: LoadResu
     if (result !== first) onRefresh(result)
   })
   return first
-}
-
-// a sector the user belongs to but nobody has described yet still needs a line in the list
-const unnamed = (id: string): SectorSummary => demoSectors.find((s) => s.id === id) ?? { id, nameAr: id, nameEn: id }
-
-async function readSectors(access: Access): Promise<SectorSummary[]> {
-  const summary = (id: string, data: DocumentData): SectorSummary => ({ id, nameAr: data.nameAr, nameEn: data.nameEn })
-  if (access.role === 'admin') {
-    const snap = await serverDocs('sectors', collection(db, 'sectors'))
-    return snap.docs.map((d) => summary(d.id, d.data()))
-  }
-  // The rules refuse a member the whole collection, but answer for each sector
-  // they belong to — one read each, and the list is theirs alone.
-  const snaps = await Promise.all(access.sectors.map((id) => getDocFromServer(doc(db, 'sectors', id))))
-  countReads('sectors', snaps.length)
-  return snaps.map((snap) => (snap.exists() ? summary(snap.id, snap.data()) : unnamed(snap.id)))
-}
-
-const sameSectors = (list: SectorSummary[], ids: string[]) => list.length === ids.length && list.every((s) => ids.includes(s.id))
-
-/** The sectors this user may choose from: all of them for an admin, their own for a member. Never throws, never empty. */
-export async function listSectors(access: Access): Promise<SectorSummary[]> {
-  if (!isFirebaseConfigured) return demoSectors
-  const uid = await currentUid()
-  const fallback = access.role === 'admin' ? demoSectors : access.sectors.map(unnamed)
-  if (!uid) return fallback
-  return shared(`sectors:${uid}`, async () => {
-    const key = sectorsKey()
-    const found = cache.get<SectorSummary[]>(key, uid)
-    // a member whose sectors changed since the list was saved reads it again
-    const saved = found && (access.role === 'admin' || sameSectors(found.value, access.sectors)) ? found : null
-    if (saved && cache.isFresh(saved)) return saved.value
-    try {
-      const list = await withTimeout(readSectors(access))
-      if (list.length === 0) return fallback
-      cache.set(key, uid, list)
-      return list
-    } catch (error) {
-      console.warn('restoration: the sectors could not be read —', error)
-      return saved?.value ?? fallback
-    }
-  })
 }
 
 /**

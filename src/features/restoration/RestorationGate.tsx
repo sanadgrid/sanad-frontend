@@ -7,7 +7,7 @@ import './tokens.css'
 import './RestorationGate.css'
 
 // The dashboard is private. Nothing of it — its code, the map library, the
-// database client, the demo network — is downloaded until somebody is signed in
+// database client — is downloaded until somebody is signed in
 // AND the database has confirmed they are an admin or a member of a sector.
 // This file and what it imports are all that anybody else ever receives.
 const RestorationPage = lazy(() => import('./RestorationPage').then((m) => ({ default: m.RestorationPage })))
@@ -15,8 +15,8 @@ const RestorationPage = lazy(() => import('./RestorationPage').then((m) => ({ de
 /*
  * TEST ONLY. Automated browser tests must never touch the live database, so they
  * run on a build WITHOUT the project's keys — where nobody can sign in, and the
- * gate would stay shut. `VITE_E2E_OPEN=1` opens that build on the bundled demo
- * network. It is honoured only when the keys are absent: vite.config.ts turns
+ * gate would stay shut. `VITE_E2E_OPEN=1` opens that build on a dashboard without
+ * plans or layers. It is honoured only when the keys are absent: vite.config.ts turns
  * `__E2E_OPEN__` into a plain `false` for a build that can reach the real
  * project, so what follows is not even part of that build — and `!canSignIn`
  * says the same once more at run time. `?gate=<state>` then shows one of the

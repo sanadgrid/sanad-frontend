@@ -1,11 +1,13 @@
 import { useState, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
-import { locate, placeOf, type StationDirectory } from '../backup/directory'
+import { locate, placeOf, placesOf, type StationDirectory } from '../backup/directory'
 import { ratioLabel } from '../backup/format'
 import type { BackupCase, CaseResult } from '../backup/model'
+import type { SupportLink } from '../backup/planNetwork'
 import { fmt } from '../labels'
 import { CaseFigures, CaseTable } from './CaseTable'
 import { NOT_ON_MAP } from './StationNoField'
+import { SupportList } from './SupportCard'
 
 export interface SensitivityProps {
   plain: { ratio: number; status: CaseResult['status']; unrestorableA: number }
@@ -54,12 +56,17 @@ interface PlanDetailProps {
   onDelete: () => void
   /** Phones: the sheet gives way to the map. */
   onShowOnMap: () => void
+  /** The main elements this one stands behind as a backup, if any. */
+  supports: SupportLink[]
+  onPlan: (caseId: string) => void
 }
 
 export function PlanDetail(props: PlanDetailProps) {
   const { plan, result, ratingA, directory, canEdit, busy, onBack, onEdit, onDelete, onShowOnMap } = props
   const [confirming, setConfirming] = useState(false)
   const missing = [plan.main, ...plan.backups].filter((e) => !placeOf(directory, e)).map((e) => e.no)
+  // pasted in bulk, the number stands at several places and nobody has said which
+  const unsettled = [plan.main, ...plan.backups].filter((e) => !e.at && placesOf(directory, e.no).length > 1).map((e) => e.no)
   const names = plan.backups.map((b) => {
     const station = locate(directory, b.no)
     return station && station.name !== `S/S ${station.no}` ? station.name : undefined
@@ -126,6 +133,24 @@ export function PlanDetail(props: PlanDetailProps) {
       <CaseFigures result={result} subject={plan.level === 'feeder' ? 'حمل المغذي' : 'حمل المحطة'} />
       {props.sensitivity}
       <CaseTable result={result} captions={names} />
+
+      {props.supports.length > 0 && (
+        <section className="rc-plan__also">
+          <h4>
+            وهو بديل أيضاً لـ <span className="num">{fmt(props.supports.length)}</span>
+          </h4>
+          <SupportList links={props.supports} onPlan={props.onPlan} />
+        </section>
+      )}
+
+      {unsettled.length > 0 && (
+        <p className="rc-plans__notice">
+          <bdi className="num" dir="ltr">
+            {unsettled.join(' · ')}
+          </bdi>{' '}
+          — له أكثر من موقع على الخريطة.{canEdit ? ' حدّد الموقع من «تعديل».' : ''}
+        </p>
+      )}
 
       {missing.length > 0 && (
         <p className="rc-plans__notice">

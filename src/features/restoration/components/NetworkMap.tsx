@@ -2,7 +2,6 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, type RefObject } from 'react'
 import type { StationPoint } from '../backup/directory'
-import type { Layers } from '../filters'
 import { layerColor } from '../layerPalette'
 import { themeColors, type MapColors } from '../mapTheme'
 import { mapTiles } from '../mapTiles'
@@ -21,28 +20,28 @@ import {
   type DrawnImportedLayer,
 } from './importedLayer'
 import { fitBbox, fitPoints, flyToPoint, followClearArea, panTo, patientFit, type MapView, type Place } from './mapView'
-import { drawNetwork, LABEL_PANE, LABEL_PANE_Z, type MapStation, type MapTie, type Themed } from './networkLayers'
 import { drawPickLayer, PICK_PANE, PICK_PANE_Z, pointOut, type PickLayer } from './pickLayer'
 import { drawPlans, PLAN_PANE, PLAN_PANE_Z, type PlanDrawing } from './planLinks'
+import { drawPlanNetwork, LABEL_PANE, LABEL_PANE_Z, type MapLink, type MapNode, type Themed } from './planNetworkLayers'
 
 interface NetworkMapProps {
   center: LatLng
   zoom: number
-  stations: MapStation[]
-  ties: MapTie[]
-  layers: Layers
+  /** The stations and links the backup plans make. */
+  nodes: MapNode[]
+  links: MapLink[]
   /** Imported layers that are ticked and loaded, drawn under the network. */
   imported: VisibleLayer[]
   /** Set to move the map; a new object moves it again. */
   view: MapView | null
   /** The part of the map that no panel covers: views are aimed at it. */
   clearArea: RefObject<HTMLElement | null>
-  selectedId: string | null
-  /** Ties to mark: those of the feeder whose loss is being looked at. */
-  highlightTies: ReadonlySet<string>
-  /** Backup plans to draw, between the imported layers and the network. */
+  selectedKey: string | null
+  /** The case being read: the plan layer draws its links, with the flow and the amperes. */
+  selectedCaseId: string | null
+  /** The plan being read or written, drawn over the network's links. */
   plans: PlanDrawing[]
-  /** What the map keeps in view while the network has no stations to show: a plan, or the imported stations. */
+  /** What the map keeps in view until the user moves it: the stations of the plans, else the imported ones. */
   frame: LatLng[]
   /** Set while the stations of a plan are being clicked on the map: every station that can be. */
   pickable: StationPoint[] | null
@@ -51,7 +50,7 @@ interface NetworkMapProps {
   /** A place to point out: the option of a duplicate number under the pointer. */
   pointedOut: LatLng | null
   theme: Theme
-  onSelect: (stationId: string) => void
+  onSelect: (nodeKey: string) => void
   onSelectPlan: (planId: string) => void
   onPick: (point: StationPoint) => void
 }
@@ -90,14 +89,13 @@ const LABEL_ZOOM = 11
 export function NetworkMap({
   center,
   zoom,
-  stations,
-  ties,
-  layers,
+  nodes,
+  links,
   imported,
   view,
   clearArea,
-  selectedId,
-  highlightTies,
+  selectedKey,
+  selectedCaseId,
   plans,
   frame,
   pickable,
@@ -121,17 +119,15 @@ export function NetworkMap({
   const select = useRef(onSelect)
   const selectPlan = useRef(onSelectPlan)
   const pick = useRef(onPick)
-  // what a fitted view frames: the network's stations, or what stands in for them
-  const networkShown = stations.length > 0
   const framedPoints = useRef(frame)
-  const shown = useRef(stations)
+  const shown = useRef(nodes)
   useEffect(() => {
     select.current = onSelect
     selectPlan.current = onSelectPlan
     pick.current = onPick
-    shown.current = stations
-    framedPoints.current = networkShown ? stations.map((s) => s.location) : frame
-  }, [onSelect, onSelectPlan, onPick, stations, networkShown, frame])
+    shown.current = nodes
+    framedPoints.current = frame
+  }, [onSelect, onSelectPlan, onPick, nodes, frame])
 
   // Until the user moves the map himself, it keeps the stations framed in whatever
   // room the panels leave: opening the filters slides the network aside, not under them.
@@ -217,13 +213,13 @@ export function NetworkMap({
     fitPoints(instance, framedPoints.current, clearArea.current, false)
   }, [center.lat, center.lng, zoom, clearArea])
 
-  // Without a network on the map, what is framed arrives later than the map does
-  // (the imported stations, then a plan): the view follows it until the user moves
-  // the map. A filter never comes through here — it changes neither of the two.
+  // What is framed arrives later than the map does (the imported stations, then the
+  // plans): the view follows it until the user moves the map. A filter never comes
+  // through here — the frame is every station of the plans, shown or not.
   useEffect(() => {
     const instance = map.current
-    if (instance && framed.current) fitPoints(instance, framedPoints.current, clearArea.current, false)
-  }, [networkShown, frame, clearArea])
+    if (instance && framed.current) fitPoints(instance, frame, clearArea.current, false)
+  }, [frame, clearArea])
 
   useEffect(() => {
     const group = overlay.current
@@ -237,8 +233,8 @@ export function NetworkMap({
       painters.current.push(paint)
       return layer.addTo(group)
     }
-    drawNetwork({ group, themed, stations, ties, layers, selectedId, highlightTies, onSelect: (id) => select.current(id) })
-  }, [stations, ties, layers, selectedId, highlightTies])
+    drawPlanNetwork({ group, themed, nodes, links, selectedKey, selectedCaseId, onSelect: (key) => select.current(key) })
+  }, [nodes, links, selectedKey, selectedCaseId])
 
   // Backup plans have a group of their own: a filter or a selection in the network
   // never redraws them, and their colours are the stylesheet's, so neither does a theme.
@@ -325,7 +321,7 @@ export function NetworkMap({
     if (view.kind === 'reveal') return void panTo(instance, view.at, clearArea.current, true)
     // a framed map moves itself when the panel of the clicked station opens
     if (view.kind === 'station' && view.whenCovered && framed.current) return
-    const station = view.kind === 'station' && shown.current.find((s) => s.id === view.id)
+    const station = view.kind === 'station' && shown.current.find((n) => n.key === view.id)
     if (view.kind === 'place') {
       const { place, layerId } = view
       if (place.bbox) fitBbox(instance, place.bbox, clearArea.current)
@@ -336,7 +332,7 @@ export function NetworkMap({
     } else if (view.kind === 'points') fitPoints(instance, view.points, clearArea.current)
     else if (view.kind === 'zoom') instance.setZoom(instance.getZoom() + view.by)
     else if (view.kind === 'bbox') fitBbox(instance, view.bbox, clearArea.current)
-    else if (!station || !panTo(instance, station.location, clearArea.current, view.whenCovered)) return
+    else if (!station || !panTo(instance, station.at, clearArea.current, view.whenCovered)) return
     framed.current = false
   }, [view, clearArea])
 

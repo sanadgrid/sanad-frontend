@@ -88,6 +88,8 @@
   --rc-link-over: #e11d48;
   --rc-link-casing: #fff;
   --rc-link-main: #0a2340;
+  /* a station that only backs others up */
+  --rc-support-ring: #5b7189;
 }
 
 .rc[data-theme='dark'] {
@@ -156,4 +158,5 @@
   --rc-link-over: #ff6b81;
   --rc-link-casing: #061b35;
   --rc-link-main: #fff;
+  --rc-support-ring: #9db2c7;
 }

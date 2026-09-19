@@ -2,48 +2,30 @@ import { AppVersion } from '../../../components/AppVersion'
 import { Icon } from '../../../components/Icon'
 import { Logo } from '../../../components/Logo'
 import type { AuthUser } from '../../../services/auth'
-import type { NetworkSource, SectorSummary } from '../../../services/restoration'
+import type { SectorSummary } from '../sectors'
 import type { Theme } from '../useTheme'
+import { DataMenu, type DataAction } from './DataMenu'
 
 interface TopBarProps {
-  /** `null` while the network is still loading. */
-  source: NetworkSource | null
-  /** The synthetic training network is what the map shows. */
-  synthetic: boolean
+  /** What the plans on screen are: real readings, or loads assumed for a presentation. `null` without plans. */
+  dataKind: 'real' | 'demo' | null
   sectors: SectorSummary[]
   sectorId: string
   /** `null` only in the test build that has nobody to sign in. */
   user: AuthUser | null
-  /** A sign-out or an upload is in flight. */
+  /** A sign-out or a write is in flight. */
   busy: boolean
-  /** Admins may import map layers, once there is a sector to import them into. */
-  canImport: boolean
-  /** Admins may publish the demo network. */
-  canPublish: boolean
+  /** What an admin may do to the sector's data; empty for everybody else. */
+  dataActions: DataAction[]
   theme: Theme
   onToggleTheme: () => void
   onSectorChange: (sectorId: string) => void
   onSignOut: () => void
-  onSeed: () => void
-  onImport: () => void
 }
 
-export function TopBar({
-  source,
-  synthetic,
-  sectors,
-  sectorId,
-  user,
-  busy,
-  canImport,
-  canPublish,
-  theme,
-  onToggleTheme,
-  onSectorChange,
-  onSignOut,
-  onSeed,
-  onImport,
-}: TopBarProps) {
+const BADGE = { real: 'بيانات فعلية', demo: 'بيانات تجريبية' }
+
+export function TopBar({ dataKind, sectors, sectorId, user, busy, dataActions, theme, onToggleTheme, onSectorChange, onSignOut }: TopBarProps) {
   // the button names the theme it switches to
   const otherTheme = theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'
 
@@ -60,13 +42,12 @@ export function TopBar({
       </p>
 
       <div className="rc-topbar__tools">
-        {source && (
-          <span className={`rc-badge rc-badge--${source}`}>
+        {dataKind && (
+          <span className={`rc-badge rc-badge--${dataKind}`}>
             <i aria-hidden="true" />
-            {source === 'demo' ? 'بيانات عامة تجريبية' : 'بيانات مباشرة'}
+            {BADGE[dataKind]}
           </span>
         )}
-        {synthetic && <span className="rc-demo-chip">تجريبي</span>}
 
         <label className="rc-select rc-select--inline">
           <span>القطاع</span>
@@ -83,19 +64,7 @@ export function TopBar({
           <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} />
         </button>
 
-        {canImport && (
-          <button className="rc-btn" type="button" disabled={busy} onClick={onImport}>
-            <Icon name="layers" size={15} />
-            استيراد طبقات الخريطة
-          </button>
-        )}
-
-        {canPublish && (
-          <button className="rc-btn" type="button" disabled={busy} onClick={onSeed}>
-            <Icon name="upload" size={15} />
-            نشر البيانات التجريبية
-          </button>
-        )}
+        {dataActions.length > 0 && <DataMenu actions={dataActions} busy={busy} />}
 
         {user && (
           <button className="rc-btn" type="button" disabled={busy} onClick={onSignOut} title={user.email ?? undefined}>
