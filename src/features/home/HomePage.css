@@ -1392,21 +1392,31 @@ body:has(.home) {
 }
 
 @media (max-width: 480px) {
-  /* beside the full lockup there is room for the icon only; the label stays in aria-label */
-  .nav__signin--bar {
-    width: 44px;
-    padding: 0;
+  /* phones keep the sign-in label (owner's call), so the tagline steps aside to make room */
+  .nav .logo__tag {
+    display: none;
   }
 
-  .nav__signin--bar span {
-    display: none;
+  .nav__signin--bar {
+    gap: 6px;
+    padding-inline: 12px;
+    font-size: 13px;
   }
 }
 
-@media (max-width: 380px) {
-  /* the smallest phones: the mark and the wordmark stay, the tagline steps aside */
-  .nav .logo__tag {
-    display: none;
+@media (max-width: 360px) {
+  /* the narrowest phones: tighten rather than drop the label */
+  .nav__inner {
+    gap: 6px;
+  }
+
+  .nav__signin--bar {
+    padding-inline: 9px;
+    font-size: 12px;
+  }
+
+  .nav .logo__word {
+    font-size: 19px !important;
   }
 }
 
